@@ -1,0 +1,2 @@
+Todo:
+- Download datasets: https://github.com/jbrownlee/Datasets/

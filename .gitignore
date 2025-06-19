@@ -16,7 +16,6 @@ __pycache__
 
 .env
 
-data
 outputs
 *.tmp
 
