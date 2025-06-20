@@ -39,7 +39,6 @@ class MultiHeadAttention(nn.Module):
         v = self.v_linear(v).view(B, Lk, self.n_heads, self.d_k).transpose(1,2)
         scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.d_k)  # [B, n_heads, Lq, Lk]
         if mask is not None:
-            # mask: [B, 1, Lq, Lk] or [1, 1, Lq, Lk]
             scores = scores.masked_fill(mask == 0, float('-inf'))
         attn = F.softmax(scores, dim=-1)
         attn = self.dropout(attn)
@@ -48,20 +47,26 @@ class MultiHeadAttention(nn.Module):
         return self.out(context)
 
 class PositionwiseFeedForward(nn.Module):
-    def __init__(self, d_model, d_ff, dropout=0.1):
+    def __init__(self, d_model, d_ff, dropout=0.1, activation='gelu'):
         super().__init__()
         self.linear1 = nn.Linear(d_model, d_ff)
         self.linear2 = nn.Linear(d_ff, d_model)
         self.dropout = nn.Dropout(dropout)
+        if activation == 'gelu':
+            self.activation = F.gelu
+        elif activation == 'relu':
+            self.activation = F.relu
+        else:
+            raise ValueError("activation must be 'gelu' or 'relu'")
 
     def forward(self, x):
-        return self.linear2(self.dropout(F.relu(self.linear1(x))))
+        return self.linear2(self.dropout(self.activation(self.linear1(x))))
 
 class EncoderLayer(nn.Module):
-    def __init__(self, d_model, n_heads, d_ff, dropout=0.1):
+    def __init__(self, d_model, n_heads, d_ff, dropout=0.1, activation='gelu'):
         super().__init__()
         self.self_attn = MultiHeadAttention(d_model, n_heads, dropout)
-        self.ff = PositionwiseFeedForward(d_model, d_ff, dropout)
+        self.ff = PositionwiseFeedForward(d_model, d_ff, dropout, activation)
         self.norm1 = nn.LayerNorm(d_model)
         self.norm2 = nn.LayerNorm(d_model)
         self.dropout1 = nn.Dropout(dropout)
@@ -77,11 +82,11 @@ class EncoderLayer(nn.Module):
         return x
 
 class DecoderLayer(nn.Module):
-    def __init__(self, d_model, n_heads, d_ff, dropout=0.1):
+    def __init__(self, d_model, n_heads, d_ff, dropout=0.1, activation='gelu'):
         super().__init__()
         self.self_attn = MultiHeadAttention(d_model, n_heads, dropout)
         self.cross_attn = MultiHeadAttention(d_model, n_heads, dropout)
-        self.ff = PositionwiseFeedForward(d_model, d_ff, dropout)
+        self.ff = PositionwiseFeedForward(d_model, d_ff, dropout, activation)
         self.norm1 = nn.LayerNorm(d_model)
         self.norm2 = nn.LayerNorm(d_model)
         self.norm3 = nn.LayerNorm(d_model)
@@ -102,12 +107,12 @@ class DecoderLayer(nn.Module):
         return x
 
 class Encoder(nn.Module):
-    def __init__(self, input_dim, d_model, n_layers, n_heads, d_ff, dropout=0.1, max_len=512):
+    def __init__(self, input_dim, d_model, n_layers, n_heads, d_ff, dropout=0.1, max_len=512, activation='gelu'):
         super().__init__()
         self.input_proj = nn.Linear(input_dim, d_model)
         self.pos_enc = PositionalEncoding(d_model, max_len)
         self.layers = nn.ModuleList([
-            EncoderLayer(d_model, n_heads, d_ff, dropout) for _ in range(n_layers)
+            EncoderLayer(d_model, n_heads, d_ff, dropout, activation) for _ in range(n_layers)
         ])
         self.dropout = nn.Dropout(dropout)
 
@@ -120,12 +125,12 @@ class Encoder(nn.Module):
         return x
 
 class Decoder(nn.Module):
-    def __init__(self, input_dim, d_model, n_layers, n_heads, d_ff, dropout=0.1, max_len=512):
+    def __init__(self, input_dim, d_model, n_layers, n_heads, d_ff, dropout=0.1, max_len=512, activation='gelu'):
         super().__init__()
         self.input_proj = nn.Linear(input_dim, d_model)
         self.pos_enc = PositionalEncoding(d_model, max_len)
         self.layers = nn.ModuleList([
-            DecoderLayer(d_model, n_heads, d_ff, dropout) for _ in range(n_layers)
+            DecoderLayer(d_model, n_heads, d_ff, dropout, activation) for _ in range(n_layers)
         ])
         self.dropout = nn.Dropout(dropout)
 
@@ -138,10 +143,21 @@ class Decoder(nn.Module):
         return x
 
 class TimeSeriesTransformer(nn.Module):
-    def __init__(self, input_dim, output_dim, d_model=64, n_layers=2, n_heads=4, d_ff=128, dropout=0.1, max_len=512):
+    def __init__(
+        self,
+        input_dim,
+        output_dim,
+        d_model=256,
+        n_layers=6,
+        n_heads=8,
+        d_ff=1024,
+        dropout=0.1,
+        max_len=512,
+        activation='gelu'
+    ):
         super().__init__()
-        self.encoder = Encoder(input_dim, d_model, n_layers, n_heads, d_ff, dropout, max_len)
-        self.decoder = Decoder(output_dim, d_model, n_layers, n_heads, d_ff, dropout, max_len)
+        self.encoder = Encoder(input_dim, d_model, n_layers, n_heads, d_ff, dropout, max_len, activation)
+        self.decoder = Decoder(output_dim, d_model, n_layers, n_heads, d_ff, dropout, max_len, activation)
         self.out_proj = nn.Linear(d_model, output_dim)
 
     def generate_square_subsequent_mask(self, sz):
