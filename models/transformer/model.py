@@ -7,14 +7,15 @@ class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=5000):
         super().__init__()
         pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        position = torch.arange(0, max_len, dtype=torch.float32).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0)
+        pe = pe.unsqueeze(0)  # [1, max_len, d_model]
         self.register_buffer('pe', pe)
 
     def forward(self, x):
+        # x: [batch, seq_len, d_model]
         x = x + self.pe[:, :x.size(1), :]
         return x
 
@@ -31,17 +32,19 @@ class MultiHeadAttention(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, q, k, v, mask=None):
-        B, L, D = q.size()
-        q = self.q_linear(q).view(B, L, self.n_heads, self.d_k).transpose(1,2)
-        k = self.k_linear(k).view(B, -1, self.n_heads, self.d_k).transpose(1,2)
-        v = self.v_linear(v).view(B, -1, self.n_heads, self.d_k).transpose(1,2)
-        scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.d_k)
+        B, Lq, D = q.size()
+        Lk = k.size(1)
+        q = self.q_linear(q).view(B, Lq, self.n_heads, self.d_k).transpose(1,2)  # [B, n_heads, Lq, d_k]
+        k = self.k_linear(k).view(B, Lk, self.n_heads, self.d_k).transpose(1,2)
+        v = self.v_linear(v).view(B, Lk, self.n_heads, self.d_k).transpose(1,2)
+        scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.d_k)  # [B, n_heads, Lq, Lk]
         if mask is not None:
+            # mask: [B, 1, Lq, Lk] or [1, 1, Lq, Lk]
             scores = scores.masked_fill(mask == 0, float('-inf'))
         attn = F.softmax(scores, dim=-1)
         attn = self.dropout(attn)
-        context = torch.matmul(attn, v)
-        context = context.transpose(1,2).contiguous().view(B, L, D)
+        context = torch.matmul(attn, v)  # [B, n_heads, Lq, d_k]
+        context = context.transpose(1,2).contiguous().view(B, Lq, D)
         return self.out(context)
 
 class PositionwiseFeedForward(nn.Module):
@@ -109,7 +112,7 @@ class Encoder(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, src, src_mask=None):
-        x = self.input_proj(src)  # [B, L, input_dim] -> [B, L, d_model]
+        x = self.input_proj(src)
         x = self.pos_enc(x)
         x = self.dropout(x)
         for layer in self.layers:
@@ -135,7 +138,7 @@ class Decoder(nn.Module):
         return x
 
 class TimeSeriesTransformer(nn.Module):
-    def __init__(self, input_dim, output_dim, d_model=512, n_layers=3, n_heads=8, d_ff=2048, dropout=0.1, max_len=512):
+    def __init__(self, input_dim, output_dim, d_model=64, n_layers=2, n_heads=4, d_ff=128, dropout=0.1, max_len=512):
         super().__init__()
         self.encoder = Encoder(input_dim, d_model, n_layers, n_heads, d_ff, dropout, max_len)
         self.decoder = Decoder(output_dim, d_model, n_layers, n_heads, d_ff, dropout, max_len)
@@ -147,10 +150,10 @@ class TimeSeriesTransformer(nn.Module):
 
     def forward(self, src, tgt):
         # src: [B, src_len, input_dim]
-        # tgt: [B, tgt_len, output_dim] (通常output_dim=input_dim)
+        # tgt: [B, tgt_len, output_dim]
         src_mask = None
         tgt_mask = self.generate_square_subsequent_mask(tgt.size(1)).to(tgt.device)
         memory = self.encoder(src, src_mask)
         out = self.decoder(tgt, memory, tgt_mask, None)
-        out = self.out_proj(out)  # [B, tgt_len, output_dim]
+        out = self.out_proj(out)
         return out
