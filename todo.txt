@@ -1,2 +1,4 @@
 Todo:
-- Download datasets: https://github.com/jbrownlee/Datasets/
+- Download datasets:
+	- https://github.com/jbrownlee/Datasets/
+	- https://github.com/juyongjiang/TimeSeriesDatasets
