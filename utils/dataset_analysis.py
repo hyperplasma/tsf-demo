@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 plt.rcParams['font.sans-serif'] = ['SimHei', 'Arial Unicode MS', 'Microsoft YaHei']
 plt.rcParams['axes.unicode_minus'] = False
 
-def plot_series(csv_path, column='IPG2211A2N', date_column='DATE', n=None, title='数据时序图'):
+def plot_series(csv_path, column='IPG2211A2N', date_column='DATE', n=None, title='数据时序图', show_xticks=True):
     """
     绘制时间序列曲线
     :param csv_path: CSV文件路径
@@ -13,6 +13,7 @@ def plot_series(csv_path, column='IPG2211A2N', date_column='DATE', n=None, title
     :param date_column: 日期列名
     :param n: 只显示最近n条（为None则显示全部）
     :param title: 图标题
+    :param show_xticks: 是否显示x轴刻度（True显示，False隐藏）
     """
     df = pd.read_csv(csv_path)
     if n is not None:
@@ -22,9 +23,12 @@ def plot_series(csv_path, column='IPG2211A2N', date_column='DATE', n=None, title
     plt.xlabel('日期')
     plt.ylabel(column)
     plt.title(title)
-    plt.xticks(rotation=45)
     plt.legend()
     plt.tight_layout()
+    if not show_xticks:
+        plt.xticks([])
+    else:
+        plt.xticks(rotation=45)
     plt.show()
 
 class CSVAnalyzer:
@@ -78,6 +82,7 @@ if __name__ == "__main__":
         csv_path="data/electric_production/Electric_Production.csv",
         column='IPG2211A2N',
         date_column='DATE',
-        n=None,
-        title='美国电力生产时序图'
+        n=20,
+        title='美国电力生产时序图',
+        # show_xticks=False,
     )
