@@ -82,7 +82,6 @@ if __name__ == "__main__":
         csv_path="data/electric_production/Electric_Production.csv",
         column='IPG2211A2N',
         date_column='DATE',
-        n=20,
         title='美国电力生产时序图',
         # show_xticks=False,
     )
