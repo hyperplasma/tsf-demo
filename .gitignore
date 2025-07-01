@@ -16,7 +16,7 @@ __pycache__
 
 .env
 
-data
+dataset
 outputs
 *.tmp
 
@@ -25,3 +25,5 @@ outputs
 *.rar
 *.7z
 *.bak
+
+tsf_test
