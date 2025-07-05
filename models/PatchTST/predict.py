@@ -11,7 +11,7 @@ from datetime import datetime
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 from models.PatchTST.model import PatchTST
 from models.PatchTST.config import get_config
-from models.PatchTST.utils import ensure_dir, load_checkpoint, save_log
+from models.PatchTST.utils import ensure_dir, load_checkpoint
 
 # ------------------ Dataset Definition ------------------
 class TimeSeriesDataset(Dataset):
@@ -24,8 +24,8 @@ class TimeSeriesDataset(Dataset):
         return len(self.data) - self.input_length - self.output_length + 1
 
     def __getitem__(self, idx):
-        x = self.data[idx:idx+self.input_length]
-        y = self.data[idx+self.input_length:idx+self.input_length+self.output_length]
+        x = self.data[idx:idx + self.input_length]
+        y = self.data[idx + self.input_length:idx + self.input_length + self.output_length]
         return torch.tensor(x, dtype=torch.float), torch.tensor(y, dtype=torch.float)
 
 def load_test_data(csv_path, val_ratio=0.1, test_ratio=0.1):
@@ -37,7 +37,7 @@ def load_test_data(csv_path, val_ratio=0.1, test_ratio=0.1):
     num_test = int(num_samples * test_ratio)
     num_train = num_samples - num_val - num_test
 
-    test_data = data[num_train:num_train+num_test]
+    test_data = data[num_train:num_train + num_test]
     return test_data
 
 def evaluate(model, loader, device):
@@ -90,8 +90,15 @@ def main():
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_path = os.path.join(output_dir, f'test_result_{dataset_name}_{current_time}.txt')
     with open(log_path, 'w') as f:
+        # 模型配置信息
+        model_config_str = ', '.join([f"{key}={value}" for key, value in cfg.items()])
         f.write(f"Model: PatchTST\n")
-        f.write(f"Dataset: {dataset_name}, Input channels: {in_chans}, Test samples: {len(test_data)}\n\n")
+        f.write(f"Model parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)} parameters\n")
+        f.write(f"Model config: {model_config_str}\n\n")
+        # 数据集信息
+        f.write(f"Dataset: {dataset_name}\n")
+        f.write(f"Input channels: {in_chans}\n")
+        f.write(f"Test samples: {len(test_data)}, Test batches: {len(test_loader)}\n\n")
         f.write("Test MSE,Test MAE,Test R2\n")
         f.write(f"{mse:.4f},{mae:.4f},{r2:.4f}\n")
 
