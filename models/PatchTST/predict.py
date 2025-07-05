@@ -6,6 +6,7 @@ import pandas as pd
 from torch.utils.data import DataLoader, Dataset
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from tqdm import tqdm
+from datetime import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 from models.PatchTST.model import PatchTST
@@ -85,10 +86,14 @@ def main():
     mse, mae, r2, preds, trues = evaluate(model, test_loader, cfg['device'])
     print(f"Test MSE: {mse:.4f} | Test MAE: {mae:.4f} | Test R2: {r2:.4f}")
 
-    # Save results
-    log_path = os.path.join(output_dir, f'test_result_{dataset_name}.csv')
-    header = ['mse', 'mae', 'r2']
-    save_log(log_path, header, [[mse, mae, r2]])
+    # Save results to txt file
+    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_path = os.path.join(output_dir, f'test_result_{dataset_name}_{current_time}.txt')
+    with open(log_path, 'w') as f:
+        f.write(f"Model: PatchTST\n")
+        f.write(f"Dataset: {dataset_name}, Input channels: {in_chans}, Test samples: {len(test_data)}\n\n")
+        f.write("Test MSE,Test MAE,Test R2\n")
+        f.write(f"{mse:.4f},{mae:.4f},{r2:.4f}\n")
 
     # Optionally save predictions and ground truth for further analysis
     np.save(os.path.join(output_dir, f'preds_{dataset_name}.npy'), preds)

@@ -8,11 +8,12 @@ from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from tqdm import tqdm
+from datetime import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 from models.PatchTST.model import PatchTST
 from models.PatchTST.config import get_config
-from models.PatchTST.utils import ensure_dir, save_checkpoint, save_log, count_parameters
+from models.PatchTST.utils import ensure_dir, save_checkpoint, count_parameters
 
 # ------------------ Dataset Definition ------------------
 class TimeSeriesDataset(Dataset):
@@ -107,7 +108,8 @@ def main():
 
     # Model
     model = PatchTST(**cfg).to(cfg['device'])
-    print(f"Number of parameters: {count_parameters(model)}")
+    num_params = count_parameters(model)
+    print(f"Number of parameters: {num_params}")
 
     # Loss, optimizer, scheduler
     criterion = torch.nn.MSELoss()
@@ -117,12 +119,17 @@ def main():
     # Logging and checkpoint paths
     output_dir = os.path.join(cfg['output_dir'], dataset_name)
     ensure_dir(output_dir)
-    log_path = os.path.join(output_dir, f'log_{dataset_name}.csv')
+    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_path = os.path.join(output_dir, f'train_log_weather_{current_time}.txt')
+
+    # Write model and dataset info to log file
+    with open(log_path, 'w') as f:
+        f.write(f"Model parameters: {num_params} parameters\n\n")
+        f.write(f"Dataset: {dataset_name}, Input channels: {in_chans}, Train samples: {len(train_data)}, Val samples: {len(val_data)}\n\n")
+        f.write("Epoch, Train Loss, Train R2, Val Loss, Val R2, Val MSE, Val MAE\n")
+
     best_loss = float('inf')
     best_epoch = 0
-
-    header = ['epoch', 'train_loss', 'train_acc', 'val_loss', 'val_acc', 'val_mse', 'val_mae']
-    save_log(log_path, header, [])
 
     # Training loop
     for epoch in range(1, cfg['epochs'] + 1):
@@ -132,11 +139,11 @@ def main():
 
         scheduler.step(val_loss)
 
-        row = [epoch, train_loss, train_acc, val_loss, val_acc, val_mse, val_mae]
-        save_log(log_path, header, [row])
+        with open(log_path, 'a') as f:
+            f.write(f"{epoch},{train_loss:.6f},{train_acc:.6f},{val_loss:.6f},{val_acc:.6f},{val_mse:.6f},{val_mae:.6f}\n")
 
-        print(f"Train Loss: {train_loss:.4f} | Train R2: {train_acc:.4f}")
-        print(f"Val Loss: {val_loss:.4f} | Val R2: {val_acc:.4f} | Val MSE: {val_mse:.4f} | Val MAE: {val_mae:.4f}")
+        print(f"Train Loss: {train_loss:.6f} | Train R2: {train_acc:.6f}")
+        print(f"Val Loss: {val_loss:.6f} | Val R2: {val_acc:.6f} | Val MSE: {val_mse:.6f} | Val MAE: {val_mae:.6f}")
 
         # Save best model
         is_best = val_loss < best_loss
@@ -150,7 +157,7 @@ def main():
             print("Early stopping!")
             break
 
-    print(f"\nTraining finished. Best val loss: {best_loss:.4f} (epoch {best_epoch})")
+    print(f"\nTraining finished. Best val loss: {best_loss:.6f} (epoch {best_epoch})")
     print(f"All logs and weights are saved in: {output_dir}")
 
 if __name__ == '__main__':
