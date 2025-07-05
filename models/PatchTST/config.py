@@ -30,11 +30,31 @@ PATCHTST_CONFIG = {
     "seed": 2023,                # 随机种子
 }
 
+# 小模型变动参数
+PATCHTST_SMALL_CONFIG_DIFF = {
+    "input_length": 96,
+    "output_length": 24,
+    "patch_len": 8,
+    "stride": 4,
+    "d_model": 32,
+    "n_heads": 2,
+    "e_layers": 1,
+    "d_ff": 64,
+    "dropout": 0.1,
+    "kernel_size": 13,
+    "device": "cpu",
+    "learning_rate": 0.001,
+    "batch_size": 8,
+    "epochs": 20,
+    "early_stop_patience": 5,
+}
+
 def get_config(custom_cfg=None):
     """
     获取PatchTST配置，支持自定义覆盖
     """
     cfg = PATCHTST_CONFIG.copy()
+    cfg.update(PATCHTST_SMALL_CONFIG_DIFF)
     if custom_cfg:
         cfg.update(custom_cfg)
     return cfg
