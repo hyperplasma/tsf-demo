@@ -55,8 +55,9 @@ def evaluate(model, loader, device):
     r2 = r2_score(trues.flatten(), preds.flatten())
     return mse, mae, r2, preds, trues
 
-def main(dataset_name='weather'):
+def main():
     cfg = get_config()
+    dataset_name = cfg['dataset']
     print(f"\n========== Testing on dataset: {dataset_name} ==========")
     data_path = os.path.join('dataset', f'{dataset_name}.csv')
     if not os.path.exists(data_path):
@@ -95,8 +96,4 @@ def main(dataset_name='weather'):
     print(f"Test results and predictions saved in: {output_dir}")
 
 if __name__ == '__main__':
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', type=str, default='weather', help='Dataset name: ETTh1, ETTh2, ETTm1, ETTm2, electricity, exchange_rate, traffic, weather, etc.')
-    args = parser.parse_args()
-    main(dataset_name=args.dataset)
+    main()

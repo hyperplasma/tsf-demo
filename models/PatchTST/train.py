@@ -40,7 +40,6 @@ def load_data(csv_path, val_ratio=0.1, test_ratio=0.1):
 
     train_data = data[:num_train]
     val_data = data[num_train-num_val:num_train]
-
     return train_data, val_data
 
 # ------------------ Train/Validation Functions ------------------
@@ -83,12 +82,13 @@ def evaluate(model, loader, criterion, device):
     return total_loss / len(loader.dataset), mse, mae, acc
 
 # ------------------ Main Training Loop ------------------
-def main(dataset_name='weather'):
+def main():
     # Config
     cfg = get_config()
     torch.manual_seed(cfg['seed'])
     np.random.seed(cfg['seed'])
 
+    dataset_name = cfg['dataset']
     print(f"\n========== Dataset: {dataset_name} ==========")
     data_path = os.path.join('dataset', f'{dataset_name}.csv')
     if not os.path.exists(data_path):
@@ -154,8 +154,4 @@ def main(dataset_name='weather'):
     print(f"All logs and weights are saved in: {output_dir}")
 
 if __name__ == '__main__':
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', type=str, default='weather', help='Dataset name: ETTh1, ETTh2, ETTm1, ETTm2, electricity, exchange_rate, traffic, weather, etc.')
-    args = parser.parse_args()
-    main(dataset_name=args.dataset)
+    main()
