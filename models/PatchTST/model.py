@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from .layers import PatchEmbedding, SeriesDecomp
-from .utils import get_positional_encoding
+from models.PatchTST.layers import PatchEmbedding, SeriesDecomp
+from models.PatchTST.utils import get_positional_encoding
 
 class PatchTST(nn.Module):
     """
@@ -58,10 +58,10 @@ class PatchTST(nn.Module):
             in_chans=self.in_chans
         )
 
-        # Patch数
+        # Number of patches
         self.num_patches = 1 + (self.input_length - self.patch_len) // self.stride
 
-        # 位置编码
+        # Positional encoding
         self.pos_embed = nn.Parameter(
             get_positional_encoding(self.num_patches, self.d_model), requires_grad=False
         )
@@ -85,7 +85,7 @@ class PatchTST(nn.Module):
         # Series Decomposition
         self.decomp = SeriesDecomp(self.kernel_size)
 
-        # 输出头
+        # Output head
         if self.individual:
             self.head = nn.ModuleList([
                 nn.Linear(self.num_patches * self.d_model, self.output_length)
@@ -94,7 +94,7 @@ class PatchTST(nn.Module):
         else:
             self.head = nn.Linear(self.num_patches * self.d_model, self.output_length)
 
-        # 归一化
+        # Normalization
         if self.norm_type == 'BatchNorm':
             self.norm = nn.BatchNorm1d(self.in_chans)
         elif self.norm_type == 'LayerNorm':
@@ -106,9 +106,14 @@ class PatchTST(nn.Module):
         """
         x: [B, input_length, in_chans]
         """
-        # 归一化
+        # Normalization (fix: transpose for BatchNorm1d)
         if self.norm is not None:
-            x = self.norm(x)
+            if isinstance(self.norm, nn.BatchNorm1d):
+                x = x.transpose(1, 2)  # [B, in_chans, input_length]
+                x = self.norm(x)
+                x = x.transpose(1, 2)  # [B, input_length, in_chans]
+            else:
+                x = self.norm(x)
 
         # Series Decomposition
         seasonal_init, trend_init = self.decomp(x)
@@ -116,16 +121,16 @@ class PatchTST(nn.Module):
         # Patch Embedding
         x_patch = self.patch_embed(seasonal_init)  # [B, N_patches, d_model]
 
-        # 加入位置编码
+        # Add positional encoding
         x_patch = x_patch + self.pos_embed
 
         # Transformer Encoder
         x_enc = self.encoder(x_patch)  # [B, N_patches, d_model]
 
-        # 展平
+        # Flatten
         x_flat = x_enc.reshape(x_enc.shape[0], -1)  # [B, N_patches*d_model]
 
-        # 输出头
+        # Output head
         if self.individual:
             outputs = []
             for i in range(self.in_chans):
@@ -136,10 +141,18 @@ class PatchTST(nn.Module):
             out = self.head(x_flat)  # [B, output_length]
             out = out.unsqueeze(-1).repeat(1, 1, self.in_chans)  # [B, output_length, in_chans]
 
-        # trend部分直接线性外推
+        # Trend part direct extrapolation
         trend_patch = trend_init[:, -self.output_length:, :]
 
-        # 还原
+        # Restore
         output = out + trend_patch
 
         return output  # [B, output_length, in_chans]
+
+if __name__ == "__main__":
+    # Test model
+    model = PatchTST()
+    print(model)
+    x = torch.randn(32, 336, 7)  # [B, input_length, in_chans]
+    output = model(x)
+    print(output.shape)  # Should be [32, 96, 7]

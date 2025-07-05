@@ -83,7 +83,7 @@ def evaluate(model, loader, criterion, device):
     return total_loss / len(loader.dataset), mse, mae, acc
 
 # ------------------ Main Training Loop ------------------
-def main(dataset_name='ETTh1'):
+def main(dataset_name='weather'):
     # Config
     cfg = get_config()
     torch.manual_seed(cfg['seed'])
@@ -156,6 +156,6 @@ def main(dataset_name='ETTh1'):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', type=str, default='ETTh1', help='Dataset name: ETTh1, ETTh2, ETTm1, ETTm2, electricity, exchange_rate, traffic, weather, etc.')
+    parser.add_argument('--dataset', type=str, default='weather', help='Dataset name: ETTh1, ETTh2, ETTm1, ETTm2, electricity, exchange_rate, traffic, weather, etc.')
     args = parser.parse_args()
     main(dataset_name=args.dataset)
