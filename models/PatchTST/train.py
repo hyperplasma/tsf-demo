@@ -40,7 +40,6 @@ def load_data(csv_path, val_ratio=0.1, test_ratio=0.1):
 
     train_data = data[:num_train]
     val_data = data[num_train-num_val:num_train]
-    # test_data = data[num_train:num_train+num_test]  # Not used in training
 
     return train_data, val_data
 
