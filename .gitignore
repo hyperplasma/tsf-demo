@@ -26,4 +26,4 @@ outputs
 *.7z
 *.bak
 
-tsf_test
+test
