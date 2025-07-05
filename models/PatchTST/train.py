@@ -40,7 +40,7 @@ def load_data(csv_path, val_ratio=0.1, test_ratio=0.1):
     num_train = num_samples - num_val - num_test
 
     train_data = data[:num_train]
-    val_data = data[num_train-num_val:num_train]
+    val_data = data[num_train - num_val:num_train]
     return train_data, val_data
 
 # ------------------ Train/Validation Functions ------------------
@@ -124,9 +124,16 @@ def main():
 
     # Write model and dataset info to log file
     with open(log_path, 'w') as f:
-        f.write(f"Model parameters: {num_params} parameters\n\n")
-        f.write(f"Dataset: {dataset_name}, Input channels: {in_chans}, Train samples: {len(train_data)}, Val samples: {len(val_data)}\n\n")
-        f.write("Epoch, Train Loss, Train R2, Val Loss, Val R2, Val MSE, Val MAE\n")
+        # Model information
+        model_config_str = ', '.join([f"{key}={value}" for key, value in cfg.items()])
+        f.write(f"Model parameters: {num_params} parameters\n")
+        f.write(f"Model config: {model_config_str}\n\n")
+        # Dataset information
+        f.write(f"Dataset: {dataset_name}\n")
+        f.write(f"Input channels: {in_chans}\n")
+        f.write(f"Train samples: {len(train_data)}, Train batches: {len(train_loader)}\n")
+        f.write(f"Val samples: {len(val_data)}, Val batches: {len(val_loader)}\n\n")
+        f.write("Epoch,Train Loss,Train R2,Val Loss,Val R2,Val MSE,Val MAE\n")
 
     best_loss = float('inf')
     best_epoch = 0
@@ -140,10 +147,10 @@ def main():
         scheduler.step(val_loss)
 
         with open(log_path, 'a') as f:
-            f.write(f"{epoch},{train_loss:.6f},{train_acc:.6f},{val_loss:.6f},{val_acc:.6f},{val_mse:.6f},{val_mae:.6f}\n")
+            f.write(f"{epoch},{train_loss:.4f},{train_acc:.4f},{val_loss:.4f},{val_acc:.4f},{val_mse:.4f},{val_mae:.4f}\n")
 
-        print(f"Train Loss: {train_loss:.6f} | Train R2: {train_acc:.6f}")
-        print(f"Val Loss: {val_loss:.6f} | Val R2: {val_acc:.6f} | Val MSE: {val_mse:.6f} | Val MAE: {val_mae:.6f}")
+        print(f"Train Loss: {train_loss:.4f} | Train R2: {train_acc:.4f}")
+        print(f"Val Loss: {val_loss:.4f} | Val R2: {val_acc:.4f} | Val MSE: {val_mse:.4f} | Val MAE: {val_mae:.4f}")
 
         # Save best model
         is_best = val_loss < best_loss
@@ -157,7 +164,7 @@ def main():
             print("Early stopping!")
             break
 
-    print(f"\nTraining finished. Best val loss: {best_loss:.6f} (epoch {best_epoch})")
+    print(f"\nTraining finished. Best val loss: {best_loss:.4f} (epoch {best_epoch})")
     print(f"All logs and weights are saved in: {output_dir}")
 
 if __name__ == '__main__':
