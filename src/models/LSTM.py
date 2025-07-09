@@ -1,10 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import sys
-import os
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
 class LSTM(nn.Module):
     """
@@ -15,17 +11,17 @@ class LSTM(nn.Module):
     """
     def __init__(
         self,
-        input_length=336,
-        output_length=96,
-        d_model=128,         # LSTM隐藏层维度
-        n_layers=2,          # LSTM层数
-        dropout=0.2,
-        act='gelu',
-        in_chans=21,
-        individual=False,
-        bidirectional=False,
-        norm_type='BatchNorm',
-        pred_type='direct',
+        input_length=336,         # 输入序列长度
+        output_length=96,         # 预测序列长度
+        d_model=128,             # LSTM隐藏层维度
+        n_layers=2,              # LSTM层数
+        dropout=0.2,             # 丢弃率
+        act='gelu',              # 激活函数
+        in_chans=21,             # 输入变量数
+        individual=False,        # True：每个变量一个预测头，False：所有变量共享一个预测头
+        bidirectional=False,     # 是否双向LSTM
+        norm_type='BatchNorm',   # 标准化类型
+        pred_type='direct',      # 预测类型（direct：最后hidden，multi：多步输出）
         **kwargs
     ):
         super().__init__()
@@ -104,7 +100,6 @@ class LSTM(nn.Module):
         return y
 
 if __name__ == "__main__":
-    # 示例：用随机数据测试LSTM模型
     batch_size = 4
     input_length = 336
     in_chans = 21
@@ -113,4 +108,4 @@ if __name__ == "__main__":
     model = LSTM(input_length=input_length, output_length=output_length, in_chans=in_chans, bidirectional=True, norm_type='LayerNorm', pred_type='direct')
     y = model(x)
     print(f"Input shape: {x.shape}")
-    print(f"Output shape: {y.shape}")  # 期望: [4, 96] 或 [4, 96, 21]（individual=True时）
+    print(f"Output shape: {y.shape}")  # [4, 96] 或 [4, 96, 21]（individual=True时）

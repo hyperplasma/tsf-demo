@@ -11,8 +11,9 @@ from tqdm import tqdm
 from datetime import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
-from common.utils import ensure_dir, save_checkpoint, count_parameters
+from common.utils import ensure_dir, save_checkpoint, count_parameters, get_model_config_str
 from common.dataloader import load_data
+from common.config import get_config
 
 def train_one_epoch(model, loader, criterion, optimizer, device):
     model.train()
@@ -65,19 +66,6 @@ def evaluate(model, loader, criterion, device, scaler, target_col_idx):
     return total_loss / len(loader.dataset), mse_norm, mae_norm, acc, mse_raw, mae_raw
 
 def main(model_name="PatchTST", **kwargs):
-    # Dynamically import model config
-    try:
-        model_module = importlib.import_module(f'models.{model_name}.model')
-        config_module = importlib.import_module(f'models.{model_name}.config')
-        ModelClass = getattr(model_module, model_name)
-        get_config = getattr(config_module, 'get_config')
-    except ImportError as e:
-        raise ImportError(f"Failed to import model {model_name}. Ensure the model and config files exist.") from e
-    except AttributeError as e:
-        raise AttributeError(f"Model {model_name} does not have the required class or config function.") from e
-    except Exception as e:
-        raise RuntimeError(f"An unexpected error occurred while importing model {model_name}.") from e
-    
     # Config
     cfg = get_config(**kwargs)
     torch.manual_seed(cfg['seed'])
@@ -89,19 +77,35 @@ def main(model_name="PatchTST", **kwargs):
     if not os.path.exists(data_path):
         raise FileNotFoundError(f"Dataset file not found: {data_path}")
 
+    # 动态加载模型类
+    model_module = importlib.import_module(f"models.{model_name}")
+    ModelClass = getattr(model_module, model_name)
+    model = ModelClass(**cfg).to(cfg['device'])
+    num_params = count_parameters(model)
+    print(f"Model: {model_name}")
+    print(f"Number of parameters: {num_params}")
+
+    # 用模型成员变量传递数据参数
+    input_length = getattr(model, 'input_length', 336)
+    output_length = getattr(model, 'output_length', 96)
+
     # Data loading
-    train_set, val_set, scaler, target_col_idx = load_data(data_path, target_col=cfg['target_col'], split='train,val')
+    train_set, val_set, scaler, target_col_idx = load_data(
+        data_path,
+        input_length=input_length,
+        output_length=output_length,
+        target_col=cfg['target_col'],
+        split='train,val'
+    )
     in_chans = train_set.data.shape[1]
     cfg['in_chans'] = in_chans
 
     train_loader = DataLoader(train_set, batch_size=cfg['batch_size'], shuffle=True)
     val_loader = DataLoader(val_set, batch_size=cfg['batch_size'], shuffle=False)
 
-    # Model
-    model = ModelClass(**cfg).to(cfg['device'])
-    num_params = count_parameters(model)
-    print(f"Model: {model_name}")
-    print(f"Number of parameters: {num_params}")
+    # 如果模型支持in_chans动态调整，可重设
+    if hasattr(model, 'in_chans'):
+        model.in_chans = in_chans
 
     # Loss, optimizer, scheduler
     criterion = torch.nn.MSELoss()
@@ -109,7 +113,7 @@ def main(model_name="PatchTST", **kwargs):
     scheduler = ReduceLROnPlateau(optimizer, patience=3, factor=0.5, verbose=True)
 
     # Logging and checkpoint paths
-    output_dir = os.path.join(cfg['output_dir'], dataset_name)
+    output_dir = os.path.join(cfg['output_dir'], model_name, dataset_name)
     ensure_dir(output_dir)
     log_path = os.path.join(output_dir, f'train_log_{dataset_name}.txt')
 
@@ -147,7 +151,7 @@ def main(model_name="PatchTST", **kwargs):
                 current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
                 f.write(f"Training started at {current_time}\n")
                 # Model information
-                model_config_str = ', '.join([f"{key}={value}" for key, value in cfg.items()])
+                model_config_str = get_model_config_str(model, cfg)
                 f.write(f"Model: {model_name}\n")
                 f.write(f"Number of parameters: {num_params}\n")
                 f.write(f"Model config: {model_config_str}\n\n")
@@ -192,4 +196,4 @@ def main(model_name="PatchTST", **kwargs):
     print(f"All logs and weights are saved in: {output_dir}")
 
 if __name__ == '__main__':
-    main(model_name="Transformer")
+    main(model_name="PatchTST")

@@ -9,8 +9,9 @@ from tqdm import tqdm
 from datetime import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
-from common.utils import count_parameters
+from common.utils import count_parameters, get_model_config_str
 from common.dataloader import load_data
+from common.config import get_config
 
 def evaluate(model, loader, device):
     model.eval()
@@ -30,19 +31,6 @@ def evaluate(model, loader, device):
     return mse_norm, mae_norm, r2_norm, preds, trues
 
 def main(model_name="PatchTST", **kwargs):
-    # Dynamically import model config
-    try:
-        model_module = importlib.import_module(f'models.{model_name}.model')
-        config_module = importlib.import_module(f'models.{model_name}.config')
-        ModelClass = getattr(model_module, model_name)
-        get_config = getattr(config_module, 'get_config')
-    except ImportError as e:
-        raise ImportError(f"Failed to import model {model_name}. Ensure the model and config files exist.") from e
-    except AttributeError as e:
-        raise AttributeError(f"Model {model_name} does not have the required class or config function.") from e
-    except Exception as e:
-        raise RuntimeError(f"An unexpected error occurred while importing model {model_name}.") from e
-    
     # Config
     cfg = get_config(**kwargs)
     torch.manual_seed(cfg['seed'])
@@ -54,7 +42,7 @@ def main(model_name="PatchTST", **kwargs):
     if not os.path.exists(data_path):
         raise FileNotFoundError(f"Dataset file not found: {data_path}")
 
-    output_dir = os.path.join(cfg['output_dir'], dataset_name)
+    output_dir = os.path.join(cfg['output_dir'], model_name, dataset_name)
     best_ckpt = os.path.join(output_dir, f'best_{dataset_name}.pth')
     if not os.path.exists(best_ckpt):
         best_ckpt = os.path.join(output_dir, f'checkpoint_{dataset_name}.pth')
@@ -65,17 +53,33 @@ def main(model_name="PatchTST", **kwargs):
     checkpoint = torch.load(best_ckpt, map_location=cfg['device'])
     scaler = checkpoint['scaler']
 
-    # Load test data using new load_data interface
-    test_set, _, target_col_idx = load_data(data_path, scaler=scaler, target_col=cfg['target_col'], split='test')
-    in_chans = test_set.data.shape[1]
-    cfg['in_chans'] = in_chans
-
-    # Load model
+    # 动态加载模型类
+    model_module = importlib.import_module(f"models.{model_name}")
+    ModelClass = getattr(model_module, model_name)
     model = ModelClass(**cfg).to(cfg['device'])
     num_params = count_parameters(model)
     print(f"Model: {model_name}")
     print(f"Number of parameters: {num_params}")
     model.load_state_dict(checkpoint['state_dict'])
+
+    # 用模型成员变量传递数据参数
+    input_length = getattr(model, 'input_length', 336)
+    output_length = getattr(model, 'output_length', 96)
+
+    # Load test data using new load_data interface
+    test_set, _, target_col_idx = load_data(
+        data_path,
+        scaler=scaler,
+        input_length=input_length,
+        output_length=output_length,
+        target_col=cfg['target_col'],
+        split='test'
+    )
+    in_chans = test_set.data.shape[1]
+    cfg['in_chans'] = in_chans
+    # 如果模型支持in_chans动态调整，可重设
+    if hasattr(model, 'in_chans'):
+        model.in_chans = in_chans
 
     test_loader = DataLoader(test_set, batch_size=cfg['batch_size'], shuffle=False)
 
@@ -103,7 +107,7 @@ def main(model_name="PatchTST", **kwargs):
         current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
         f.write(f"Testing started at {current_time}\n")
         # Model config info
-        model_config_str = ', '.join([f"{key}={value}" for key, value in cfg.items()])
+        model_config_str = get_model_config_str(model, cfg)
         f.write(f"Model: {model_name}\n")
         f.write(f"Number of parameters: {num_params}\n")
         f.write(f"Model config: {model_config_str}\n\n")
