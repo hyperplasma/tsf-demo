@@ -1,5 +1,6 @@
 import os
 import sys
+import importlib
 import torch
 import numpy as np
 import pandas as pd
@@ -8,10 +9,8 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from tqdm import tqdm
 from datetime import datetime
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
-from models.PatchTST.model import PatchTST
-from models.PatchTST.config import get_config
-from models.PatchTST.utils import ensure_dir, load_checkpoint
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
+from common.utils import ensure_dir, load_checkpoint
 
 # ------------------ Dataset Definition ------------------
 class TimeSeriesDataset(Dataset):
@@ -56,10 +55,23 @@ def evaluate(model, loader, device):
     r2 = r2_score(trues.flatten(), preds.flatten())
     return mse, mae, r2, preds, trues
 
-def main():
-    cfg = get_config()
+def main(model_name="PatchTST", **kwargs):
+    # Dynamically import model config
+    try:
+        model_module = importlib.import_module(f'models.{model_name}.model')
+        config_module = importlib.import_module(f'models.{model_name}.config')
+        ModelClass = getattr(model_module, model_name)
+        get_config = getattr(config_module, 'get_config')
+    except ImportError as e:
+        raise ImportError(f"Failed to import model {model_name}. Ensure the model and config files exist.") from e
+    except AttributeError as e:
+        raise AttributeError(f"Model {model_name} does not have the required class or config function.") from e
+    except Exception as e:
+        raise RuntimeError(f"An unexpected error occurred while importing model {model_name}.") from e
+    
+    cfg = get_config(**kwargs)
     dataset_name = cfg['dataset']
-    print(f"\n========== Testing on dataset: {dataset_name} ==========")
+    print(f"\nTesting on dataset: {dataset_name}")
     data_path = os.path.join('dataset', f'{dataset_name}.csv')
     if not os.path.exists(data_path):
         raise FileNotFoundError(f"Dataset file not found: {data_path}")
@@ -73,7 +85,7 @@ def main():
     test_loader = DataLoader(test_set, batch_size=cfg['batch_size'], shuffle=False)
 
     # Load model
-    model = PatchTST(**cfg).to(cfg['device'])
+    model = ModelClass(**cfg).to(cfg['device'])
     output_dir = os.path.join(cfg['output_dir'], dataset_name)
     best_ckpt = os.path.join(output_dir, f'best.pth')
     if not os.path.exists(best_ckpt):
@@ -103,9 +115,9 @@ def main():
         f.write(f"{mse:.4f},{mae:.4f},{r2:.4f}\n")
 
     # Optionally save predictions and ground truth for further analysis
-    np.save(os.path.join(output_dir, f'preds_{dataset_name}.npy'), preds)
-    np.save(os.path.join(output_dir, f'trues_{dataset_name}.npy'), trues)
+    np.save(os.path.join(output_dir, f'preds_{dataset_name}_{current_time}.npy'), preds)
+    np.save(os.path.join(output_dir, f'trues_{dataset_name}_{current_time}.npy'), trues)
     print(f"Test results and predictions saved in: {output_dir}")
 
 if __name__ == '__main__':
-    main()
+    main(model_name="PatchTST", small=True)

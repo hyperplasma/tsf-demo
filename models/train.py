@@ -1,5 +1,6 @@
 import os
 import sys
+import importlib
 import torch
 import numpy as np
 import pandas as pd
@@ -10,10 +11,8 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from tqdm import tqdm
 from datetime import datetime
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
-from models.PatchTST.model import PatchTST
-from models.PatchTST.config import get_config
-from models.PatchTST.utils import ensure_dir, save_checkpoint, count_parameters
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
+from common.utils import ensure_dir, save_checkpoint, count_parameters
 
 # ------------------ Dataset Definition ------------------
 class TimeSeriesDataset(Dataset):
@@ -83,14 +82,27 @@ def evaluate(model, loader, criterion, device):
     return total_loss / len(loader.dataset), mse, mae, acc
 
 # ------------------ Main Training Loop ------------------
-def main():
+def main(model_name="PatchTST", **kwargs):
+    # Dynamically import model config
+    try:
+        model_module = importlib.import_module(f'models.{model_name}.model')
+        config_module = importlib.import_module(f'models.{model_name}.config')
+        ModelClass = getattr(model_module, model_name)
+        get_config = getattr(config_module, 'get_config')
+    except ImportError as e:
+        raise ImportError(f"Failed to import model {model_name}. Ensure the model and config files exist.") from e
+    except AttributeError as e:
+        raise AttributeError(f"Model {model_name} does not have the required class or config function.") from e
+    except Exception as e:
+        raise RuntimeError(f"An unexpected error occurred while importing model {model_name}.") from e
+    
     # Config
-    cfg = get_config()
+    cfg = get_config(**kwargs)
     torch.manual_seed(cfg['seed'])
     np.random.seed(cfg['seed'])
 
     dataset_name = cfg['dataset']
-    print(f"\n========== Dataset: {dataset_name} ==========")
+    print(f"Dataset: {dataset_name}")
     data_path = os.path.join('dataset', f'{dataset_name}.csv')
     if not os.path.exists(data_path):
         raise FileNotFoundError(f"Dataset file not found: {data_path}")
@@ -107,8 +119,9 @@ def main():
     val_loader = DataLoader(val_set, batch_size=cfg['batch_size'], shuffle=False)
 
     # Model
-    model = PatchTST(**cfg).to(cfg['device'])
+    model = ModelClass(**cfg).to(cfg['device'])
     num_params = count_parameters(model)
+    print(f"Model: {model_name}")
     print(f"Number of parameters: {num_params}")
 
     # Loss, optimizer, scheduler
@@ -157,7 +170,7 @@ def main():
         if is_best:
             best_loss = val_loss
             best_epoch = epoch
-            save_checkpoint({'epoch': epoch, 'state_dict': model.state_dict()}, is_best, output_dir, filename=f'checkpoint_{dataset_name}.pth')
+            save_checkpoint({'epoch': epoch, 'state_dict': model.state_dict()}, is_best, output_dir, filename=f'checkpoint_{dataset_name}_{current_time}.pth')
 
         # Early stopping
         if epoch - best_epoch > cfg['early_stop_patience']:
@@ -168,4 +181,4 @@ def main():
     print(f"All logs and weights are saved in: {output_dir}")
 
 if __name__ == '__main__':
-    main()
+    main(small=True)

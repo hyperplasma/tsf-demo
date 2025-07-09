@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from models.PatchTST.layers import PatchEmbedding, SeriesDecomp
-from models.PatchTST.utils import get_positional_encoding
+from models.common.utils import get_positional_encoding
 
 class PatchTST(nn.Module):
     """

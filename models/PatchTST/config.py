@@ -45,16 +45,21 @@ PATCHTST_SMALL_CONFIG_DIFF = {
     "device": "cpu",
     "learning_rate": 0.001,
     "batch_size": 8,
-    "epochs": 20,
+    "epochs": 100,
     "early_stop_patience": 5,
 }
 
-def get_config(custom_cfg=None):
+def get_config(custom_cfg=None, **kwargs):
     """
     获取PatchTST配置，支持自定义覆盖
     """
     cfg = PATCHTST_CONFIG.copy()
-    cfg.update(PATCHTST_SMALL_CONFIG_DIFF)
+    
+    if kwargs["small"] == True:
+        # 如果是小模型，使用小模型的配置差异
+        cfg.update(PATCHTST_SMALL_CONFIG_DIFF)
+        
     if custom_cfg:
         cfg.update(custom_cfg)
+        
     return cfg
