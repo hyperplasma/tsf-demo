@@ -75,7 +75,7 @@ def main(model_name="PatchTST", **kwargs):
     print(f"Number of parameters: {num_params}")
     model.load_state_dict(checkpoint['state_dict'])
 
-    test_set = TimeSeriesDataset(test_data, cfg['input_length'], cfg['output_length'])
+    test_set = load_test_data(data_path, scaler=scaler, target_col_idx=2) # target_col_idx=2 for T (degC)
     test_loader = DataLoader(test_set, batch_size=cfg['batch_size'], shuffle=False)
 
     # Evaluate（归一化尺度）

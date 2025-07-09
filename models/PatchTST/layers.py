@@ -1,10 +1,10 @@
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 class PatchEmbedding(nn.Module):
     """
-    Patch Embedding for time series.
-    将输入序列切分为patch，并通过线性层映射到高维空间。
+    Patch Embedding for time series (官方实现：Conv1d方式)。
     """
     def __init__(self, patch_len, stride, d_model, in_chans):
         super().__init__()
@@ -12,23 +12,14 @@ class PatchEmbedding(nn.Module):
         self.stride = stride
         self.d_model = d_model
         self.in_chans = in_chans
-        self.proj = nn.Linear(patch_len * in_chans, d_model)
+        self.proj = nn.Conv1d(in_chans, d_model, kernel_size=patch_len, stride=stride)
 
     def forward(self, x):
-        """
-        x: [B, L, C]
-        return: [B, N_patches, d_model]
-        """
-        B, L, C = x.shape
-        # use unfold to extract patches
-        patches = F.unfold(
-            x.transpose(1, 2).unsqueeze(1),  # [B, C, 1, L]
-            kernel_size=(1, self.patch_len),
-            stride=(1, self.stride)
-        )  # [B, C*self.patch_len, N_patches]
-        patches = patches.transpose(1, 2).reshape(B, -1, self.patch_len * C)  # [B, N_patches, patch_len*C]
-        out = self.proj(patches)  # [B, N_patches, d_model]
-        return out
+        # x: [B, L, C] -> [B, C, L]
+        x = x.transpose(1, 2)
+        x = self.proj(x)  # [B, d_model, N_patches]
+        x = x.transpose(1, 2)  # [B, N_patches, d_model]
+        return x
 
 class SeriesDecomp(nn.Module):
     """

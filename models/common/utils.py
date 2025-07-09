@@ -31,7 +31,7 @@ def save_log(log_path, header, rows):
 
 def get_positional_encoding(seq_len, d_model):
     """
-    标准Transformer位置编码
+    Transformer位置编码（非学习参数）
     """
     pe = np.zeros((seq_len, d_model))
     position = np.arange(0, seq_len)[:, np.newaxis]

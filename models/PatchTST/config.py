@@ -1,39 +1,34 @@
 import os
 
-# PatchTST默认参数配置
-PATCHTST_CONFIG = {
-    "input_length": 336,         # 输入序列长度
-    "output_length": 96,         # 预测序列长度
-    "kernel_size": 25,           # 趋势分解的滑动平均窗口大小
-    
-    "patch_len": 16,             # 每个patch的长度
-    "stride": 8,                 # patch滑动步长
-    
-    "d_model": 128,              # Transformer特征维度
-    "n_heads": 16,               # 多头注意力头数
-    "e_layers": 3,               # Transformer编码器层数
-    
-    "d_ff": 256,                 # 前馈网络隐藏层维度
-    "dropout": 0.2,              # dropout概率
-    "act": "gelu",               # 激活函数
-    "res_attention": False,      # 是否使用残差注意力（一般为False）
-    "pre_norm": True,            # 是否使用pre-norm结构
-    "attn_dropout": 0.0,         # 注意力dropout概率
-    
-    "dataset": "weather",        # 数据集名称（如ETTh1、ETTh2、ETTm1、ETTm2、electricity、exchange_rate、traffic、weather等）
-    "individual": False,         # 是否为每个变量单独建头
-    "norm_type": "BatchNorm",    # 归一化类型（BatchNorm或LayerNorm）
-    "pred_type": "direct",       # 预测类型（一般为direct）
-    
-    "device": "cuda" if os.environ.get("CUDA_VISIBLE_DEVICES") else "cpu",  # 设备
-    "learning_rate": 0.0001,     # 学习率
-    "batch_size": 32,            # 批大小
-    "epochs": 100,               # 最大训练轮数
-    "early_stop_patience": 12,   # 早停容忍轮数
-    
-    "output_dir": "outputs/PatchTST",  # 输出目录
-    "log_interval": 10,          # 日志打印间隔（未用，可扩展）
-    "seed": 2023                # 随机种子
+# PatchTST config
+config = {
+    'input_length': 336,
+    'output_length': 96,
+    'patch_len': 16,
+    'stride': 8,
+    'd_model': 128,
+    'n_heads': 16,
+    'e_layers': 3,
+    'd_ff': 256,
+    'dropout': 0.2,
+    'act': 'gelu',
+    'res_attention': False,
+    'pre_norm': True,
+    'attn_dropout': 0.0,
+    'individual': False,  # 单变量预测时建议False
+    'kernel_size': 25,
+    'norm_type': 'BatchNorm',
+    'pred_type': 'direct',
+    'in_chans': 21,  # 多变量输入，单变量输出（T (degC)）
+    'dataset': "weather",        # 数据集名称（如ETTh1、ETTh2、ETTm1、ETTm2、electricity、exchange_rate、traffic、weather等）
+    'device': "cuda" if os.environ.get("CUDA_VISIBLE_DEVICES") else "cpu",  # 设备
+    'learning_rate': 0.0001,     # 学习率
+    'batch_size': 32,            # 批大小
+    'epochs': 100,               # 最大训练轮数
+    'early_stop_patience': 12,   # 早停容忍轮数
+    'output_dir': "outputs/PatchTST",  # 输出目录
+    'log_interval': 10,          # 日志打印间隔（未用，可扩展）
+    'seed': 2023                # 随机种子
 }
 
 # 小模型变动参数（适配Apple Silicon）
@@ -68,7 +63,7 @@ def get_config(custom_cfg=None, **kwargs):
     """
     获取PatchTST配置，支持自定义覆盖
     """
-    cfg = PATCHTST_CONFIG.copy()
+    cfg = config.copy()
     
     if kwargs.get("small", False):
         # 如果是小模型，使用小模型的配置差异

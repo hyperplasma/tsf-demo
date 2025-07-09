@@ -85,7 +85,7 @@ def main(model_name="PatchTST", **kwargs):
         raise FileNotFoundError(f"Dataset file not found: {data_path}")
 
     # Data loading
-    train_data, val_data, scaler = load_data(data_path)
+    train_data, val_data, scaler, target_col_idx = load_data(data_path)
     in_chans = train_data.shape[1]
     cfg['in_chans'] = in_chans
 
