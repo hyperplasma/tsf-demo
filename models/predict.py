@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader, Dataset
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from tqdm import tqdm
 from datetime import datetime
+import joblib
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 from common.utils import ensure_dir, count_parameters
@@ -53,13 +54,7 @@ def main(model_name="PatchTST", **kwargs):
     if not os.path.exists(data_path):
         raise FileNotFoundError(f"Dataset file not found: {data_path}")
 
-    # Load test data
-    test_data = load_test_data(data_path)
-    in_chans = test_data.shape[1]
-    cfg['in_chans'] = in_chans
-
-    test_set = TimeSeriesDataset(test_data, cfg['input_length'], cfg['output_length'])
-    test_loader = DataLoader(test_set, batch_size=cfg['batch_size'], shuffle=False)
+    output_dir = os.path.join(cfg['output_dir'], dataset_name)
 
     # Load model
     model = ModelClass(**cfg).to(cfg['device'])
@@ -67,7 +62,6 @@ def main(model_name="PatchTST", **kwargs):
     print(f"Model: {model_name}")
     print(f"Number of parameters: {num_params}")
     
-    output_dir = os.path.join(cfg['output_dir'], dataset_name)
     best_ckpt = os.path.join(output_dir, f'best_{dataset_name}.pth')
     if not os.path.exists(best_ckpt):
         best_ckpt = os.path.join(output_dir, f'checkpoint_{dataset_name}.pth')
@@ -75,31 +69,49 @@ def main(model_name="PatchTST", **kwargs):
         raise FileNotFoundError(f"Best checkpoint not found: {best_ckpt}")
     checkpoint = torch.load(best_ckpt, map_location=cfg['device'])
     model.load_state_dict(checkpoint['state_dict'])
+    scaler = checkpoint['scaler']
+
+    # Load test data (already normalized)
+    test_data = load_test_data(data_path, scaler=scaler)
+    in_chans = test_data.shape[1]
+    cfg['in_chans'] = in_chans
+
+    test_set = TimeSeriesDataset(test_data, cfg['input_length'], cfg['output_length'])
+    test_loader = DataLoader(test_set, batch_size=cfg['batch_size'], shuffle=False)
 
     # Evaluate
     mse, mae, r2, preds, trues = evaluate(model, test_loader, cfg['device'])
     print(f"Test MSE: {mse:.4f} | Test MAE: {mae:.4f} | Test R2: {r2:.4f}")
+
+    # ---- Inverse transform (反归一化) ----
+    # preds, trues shape: (samples, output_length, channels) or (samples, output_length, ...)
+    # Need to reshape to 2D for scaler.inverse_transform
+    shape = preds.shape
+    preds_2d = preds.reshape(-1, shape[-1])
+    trues_2d = trues.reshape(-1, shape[-1])
+    preds_inv = scaler.inverse_transform(preds_2d).reshape(shape)
+    trues_inv = scaler.inverse_transform(trues_2d).reshape(shape)
 
     # Save results to txt file
     log_path = os.path.join(output_dir, f'test_result_{dataset_name}.txt')
     with open(log_path, 'w') as f:
         current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
         f.write(f"Testing started at {current_time}\n")
-        # 模型配置信息
+        # Model config info
         model_config_str = ', '.join([f"{key}={value}" for key, value in cfg.items()])
         f.write(f"Model: {model_name}\n")
         f.write(f"Number of parameters: {num_params}\n")
         f.write(f"Model config: {model_config_str}\n\n")
-        # 数据集信息
+        # Dataset info
         f.write(f"Dataset: {dataset_name}\n")
         f.write(f"Input channels: {in_chans}\n")
         f.write(f"Test samples: {len(test_data)}, Test batches: {len(test_loader)}\n\n")
         f.write("Test MSE,Test MAE,Test R2\n")
         f.write(f"{mse:.4f},{mae:.4f},{r2:.4f}\n")
 
-    # Optionally save predictions and ground truth for further analysis
-    np.save(os.path.join(output_dir, f'preds_{dataset_name}.npy'), preds)
-    np.save(os.path.join(output_dir, f'trues_{dataset_name}.npy'), trues)
+    # Save inverse transformed predictions and ground truth
+    np.save(os.path.join(output_dir, f'preds_{dataset_name}_inv.npy'), preds_inv)
+    np.save(os.path.join(output_dir, f'trues_{dataset_name}_inv.npy'), trues_inv)
     print(f"Test results and predictions saved in: {output_dir}")
 
 if __name__ == '__main__':

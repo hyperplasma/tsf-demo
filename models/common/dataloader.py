@@ -1,6 +1,7 @@
 import torch
 import pandas as pd
 from torch.utils.data import Dataset
+from sklearn.preprocessing import MinMaxScaler
 
 class TimeSeriesDataset(Dataset):
     """
@@ -21,10 +22,22 @@ class TimeSeriesDataset(Dataset):
         y = self.data[idx+self.input_length:idx+self.input_length+self.output_length]
         return torch.tensor(x, dtype=torch.float), torch.tensor(y, dtype=torch.float)
 
-def load_data(csv_path, val_ratio=0.1, test_ratio=0.1):
+def load_data(csv_path, val_ratio=0.1, test_ratio=0.1, scaler=None):
+    """
+    Loads and normalizes data from a CSV file.
+    Returns train_data, val_data, scaler.
+    """
     df = pd.read_csv(csv_path)
     df = df.drop(columns=[col for col in df.columns if col.lower() in ['date', 'datetime', 'time', 'timestamp']])
     data = df.values
+
+    # Fit scaler on all data if not provided
+    if scaler is None:
+        scaler = MinMaxScaler()
+        data = scaler.fit_transform(data)
+    else:
+        data = scaler.transform(data)
+
     num_samples = len(data)
     num_val = int(num_samples * val_ratio)
     num_test = int(num_samples * test_ratio)
@@ -32,12 +45,20 @@ def load_data(csv_path, val_ratio=0.1, test_ratio=0.1):
 
     train_data = data[:num_train]
     val_data = data[num_train - num_val:num_train]
-    return train_data, val_data
+    return train_data, val_data, scaler
 
-def load_test_data(csv_path, val_ratio=0.1, test_ratio=0.1):
+def load_test_data(csv_path, val_ratio=0.1, test_ratio=0.1, scaler=None):
+    """
+    Loads and normalizes test data from a CSV file.
+    Returns test_data.
+    """
     df = pd.read_csv(csv_path)
     df = df.drop(columns=[col for col in df.columns if col.lower() in ['date', 'datetime', 'time', 'timestamp']])
     data = df.values
+
+    if scaler is not None:
+        data = scaler.transform(data)
+
     num_samples = len(data)
     num_val = int(num_samples * val_ratio)
     num_test = int(num_samples * test_ratio)

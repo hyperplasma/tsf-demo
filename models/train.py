@@ -52,7 +52,6 @@ def evaluate(model, loader, criterion, device):
     acc = r2_score(trues.flatten(), preds.flatten())
     return total_loss / len(loader.dataset), mse, mae, acc
 
-# ------------------ Main Training Loop ------------------
 def main(model_name="PatchTST", **kwargs):
     # Dynamically import model config
     try:
@@ -79,7 +78,7 @@ def main(model_name="PatchTST", **kwargs):
         raise FileNotFoundError(f"Dataset file not found: {data_path}")
 
     # Data loading
-    train_data, val_data = load_data(data_path)
+    train_data, val_data, scaler = load_data(data_path)
     in_chans = train_data.shape[1]
     cfg['in_chans'] = in_chans
 
@@ -103,7 +102,7 @@ def main(model_name="PatchTST", **kwargs):
     # Logging and checkpoint paths
     output_dir = os.path.join(cfg['output_dir'], dataset_name)
     ensure_dir(output_dir)
-    log_path = os.path.join(output_dir, f'train_log_weather.txt')
+    log_path = os.path.join(output_dir, f'train_log_{dataset_name}.txt')
     
     # Write model and dataset info to log file (if not exist, then create its header)
     if not os.path.exists(log_path):
@@ -166,7 +165,8 @@ def main(model_name="PatchTST", **kwargs):
                          'state_dict': model.state_dict(),
                          'optimizer': optimizer.state_dict(),
                          'best_loss': best_loss,
-                         'best_epoch': best_epoch},
+                         'best_epoch': best_epoch,
+                         'scaler': scaler},
                         is_best,
                         output_dir,
                         filename=f'checkpoint_{dataset_name}.pth',
