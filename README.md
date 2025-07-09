@@ -6,8 +6,9 @@ All datasets are from [Autoformer](https://drive.google.com/drive/folders/1ZOYpT
 
 ## Models
 
-### PatchTST
+All implemented models are listed below (some of them are still WIP):
 
-```
-python -m models/PatchTST/model.py
-```
+* Transformer
+* Informer
+* Autoformer
+* PatchTST
