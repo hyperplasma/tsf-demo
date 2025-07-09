@@ -42,11 +42,13 @@ class PatchTST(nn.Module):
         self.in_chans = in_chans
         self.individual = individual
         self.patch_embed = PatchEmbedding(patch_len, stride, d_model, in_chans)
-        self.pos_embed = nn.Parameter(torch.zeros(1, (input_length - patch_len)//stride + 1, d_model))
+        self.num_patches = (input_length - patch_len) // stride + 1
+        self.pos_embed = nn.Parameter(torch.zeros(1, self.num_patches, d_model))
         encoder_layer = nn.TransformerEncoderLayer(d_model, n_heads, d_ff, dropout, batch_first=True, activation=act)
         self.encoder = nn.TransformerEncoder(encoder_layer, e_layers)
         self.dropout = nn.Dropout(dropout)
-        self.head = nn.Linear(d_model, 1)  # 单变量预测
+        # projection: flatten所有patch后映射到output_length
+        self.projection = nn.Linear(self.num_patches * d_model, output_length)
 
     def forward(self, x):
         # x: [B, L, C]
@@ -54,8 +56,8 @@ class PatchTST(nn.Module):
         x = x + self.pos_embed[:, :x.size(1), :]
         x = self.dropout(x)
         x = self.encoder(x)
-        x = self.head(x)  # [B, N_patches, 1]
-        x = x.view(x.size(0), -1)  # [B, output_length]
+        x = x.reshape(x.size(0), -1)  # [B, N_patches*d_model]
+        x = self.projection(x)        # [B, output_length]
         return x
 
 if __name__ == "__main__":
