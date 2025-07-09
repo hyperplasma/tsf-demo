@@ -6,18 +6,13 @@ def ensure_dir(path):
     if not os.path.exists(path):
         os.makedirs(path)
 
-def save_checkpoint(state, is_best, checkpoint_dir, filename='checkpoint.pth'):
+def save_checkpoint(state, is_best, checkpoint_dir, filename='checkpoint.pth', best_filename='best.pth'):
     ensure_dir(checkpoint_dir)
     filepath = os.path.join(checkpoint_dir, filename)
     torch.save(state, filepath)
     if is_best:
-        best_path = os.path.join(checkpoint_dir, 'best.pth')
+        best_path = os.path.join(checkpoint_dir, best_filename)
         torch.save(state, best_path)
-
-def load_checkpoint(model, checkpoint_path, device='cpu'):
-    checkpoint = torch.load(checkpoint_path, map_location=device)
-    model.load_state_dict(checkpoint['state_dict'])
-    return model
 
 def save_log(log_path, header, rows):
     """

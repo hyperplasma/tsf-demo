@@ -32,8 +32,8 @@ PATCHTST_CONFIG = {
 
 # 小模型变动参数
 PATCHTST_SMALL_CONFIG_DIFF = {
-    "input_length": 96,
-    "output_length": 24,
+    "input_length": 192,
+    "output_length": 48,
     "patch_len": 8,
     "stride": 4,
     "d_model": 32,
@@ -42,10 +42,9 @@ PATCHTST_SMALL_CONFIG_DIFF = {
     "d_ff": 64,
     "dropout": 0.1,
     "kernel_size": 13,
-    "device": "cpu",
     "learning_rate": 0.001,
-    "batch_size": 8,
-    "epochs": 100,
+    "batch_size": 16,
+    "epochs": 30,
     "early_stop_patience": 5,
 }
 

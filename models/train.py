@@ -12,7 +12,7 @@ from tqdm import tqdm
 from datetime import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
-from common.utils import ensure_dir, save_checkpoint, count_parameters
+from common.utils import ensure_dir, load_checkpoint, save_checkpoint, count_parameters
 
 # ------------------ Dataset Definition ------------------
 class TimeSeriesDataset(Dataset):
@@ -102,7 +102,7 @@ def main(model_name="PatchTST", **kwargs):
     np.random.seed(cfg['seed'])
 
     dataset_name = cfg['dataset']
-    print(f"Dataset: {dataset_name}")
+    print(f"Train dataset: {dataset_name}")
     data_path = os.path.join('dataset', f'{dataset_name}.csv')
     if not os.path.exists(data_path):
         raise FileNotFoundError(f"Dataset file not found: {data_path}")
@@ -133,13 +133,15 @@ def main(model_name="PatchTST", **kwargs):
     output_dir = os.path.join(cfg['output_dir'], dataset_name)
     ensure_dir(output_dir)
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_path = os.path.join(output_dir, f'train_log_weather_{current_time}.txt')
+    log_path = os.path.join(output_dir, f'train_log_weather.txt')
 
     # Write model and dataset info to log file
     with open(log_path, 'w') as f:
+        f.write(f"Training started at {current_time}\n")
         # Model information
         model_config_str = ', '.join([f"{key}={value}" for key, value in cfg.items()])
-        f.write(f"Model parameters: {num_params} parameters\n")
+        f.write(f"Model: {model_name}\n")
+        f.write(f"Number of parameters: {num_params}\n")
         f.write(f"Model config: {model_config_str}\n\n")
         # Dataset information
         f.write(f"Dataset: {dataset_name}\n")
@@ -148,11 +150,28 @@ def main(model_name="PatchTST", **kwargs):
         f.write(f"Val samples: {len(val_data)}, Val batches: {len(val_loader)}\n\n")
         f.write("Epoch,Train Loss,Train R2,Val Loss,Val R2,Val MSE,Val MAE\n")
 
+    start_epoch = 1
     best_loss = float('inf')
     best_epoch = 0
+    
+    # Resume from checkpoint if exists
+    checkpoint_path = os.path.join(output_dir, f'checkpoint_{dataset_name}.pth')
+    if os.path.exists(checkpoint_path):
+        print(f"Checkpoint detected, resuming training from: {checkpoint_path}")
+        checkpoint = torch.load(checkpoint_path, map_location=cfg['device'])
+        model.load_state_dict(checkpoint['state_dict'])
+        if 'optimizer' in checkpoint:
+            optimizer.load_state_dict(checkpoint['optimizer'])
+        if 'epoch' in checkpoint:
+            start_epoch = checkpoint['epoch'] + 1
+        if 'best_loss' in checkpoint:
+            best_loss = checkpoint['best_loss']
+        if 'best_epoch' in checkpoint:
+            best_epoch = checkpoint['best_epoch']
+        print(f"Resumed at epoch {start_epoch-1}, best_loss={best_loss:.4f}")
 
     # Training loop
-    for epoch in range(1, cfg['epochs'] + 1):
+    for epoch in range(start_epoch, cfg['epochs'] + 1):
         print(f"\n--- Epoch {epoch} / {cfg['epochs']} ---")
         train_loss, train_acc = train_one_epoch(model, train_loader, criterion, optimizer, cfg['device'])
         val_loss, val_mse, val_mae, val_acc = evaluate(model, val_loader, criterion, cfg['device'])
@@ -170,7 +189,16 @@ def main(model_name="PatchTST", **kwargs):
         if is_best:
             best_loss = val_loss
             best_epoch = epoch
-            save_checkpoint({'epoch': epoch, 'state_dict': model.state_dict()}, is_best, output_dir, filename=f'checkpoint_{dataset_name}_{current_time}.pth')
+        # Save checkpoint with optimizer and epoch info for resume
+        save_checkpoint({'epoch': epoch,
+                         'state_dict': model.state_dict(),
+                         'optimizer': optimizer.state_dict(),
+                         'best_loss': best_loss,
+                         'best_epoch': best_epoch},
+                        is_best,
+                        output_dir,
+                        filename=f'checkpoint_{dataset_name}.pth',
+                        best_filename=f'best_{dataset_name}.pth')
 
         # Early stopping
         if epoch - best_epoch > cfg['early_stop_patience']:
@@ -181,4 +209,4 @@ def main(model_name="PatchTST", **kwargs):
     print(f"All logs and weights are saved in: {output_dir}")
 
 if __name__ == '__main__':
-    main(small=True)
+    main(model_name="PatchTST", small=True)
