@@ -192,4 +192,4 @@ def main(model_name="PatchTST", **kwargs):
     print(f"All logs and weights are saved in: {output_dir}")
 
 if __name__ == '__main__':
-    main(model_name="PatchTST")
+    main(model_name="Transformer")
