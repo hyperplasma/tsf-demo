@@ -3,7 +3,7 @@ import sys
 import os
 import torch.nn as nn
 import torch.nn.functional as F
-from models.PatchTST.layers import PatchEmbedding, SeriesDecomp
+from layers import PatchEmbedding, SeriesDecomp
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
@@ -61,9 +61,13 @@ class PatchTST(nn.Module):
         return x
 
 if __name__ == "__main__":
-    # Test model
-    model = PatchTST()
-    print(model)
-    x = torch.randn(32, 336, 7)  # [B, input_length, in_chans]
-    output = model(x)
-    print(output.shape)  # Should be [32, 96, 7]
+    # 示例：用随机数据测试PatchTST模型
+    batch_size = 4
+    input_length = 336
+    in_chans = 21
+    output_length = 96
+    x = torch.randn(batch_size, input_length, in_chans)
+    model = PatchTST(input_length=input_length, output_length=output_length, in_chans=in_chans)
+    y = model(x)
+    print(f"Input shape: {x.shape}")
+    print(f"Output shape: {y.shape}")  # 期望: [4, 96] 

@@ -3,14 +3,14 @@ import sys
 import importlib
 import torch
 import numpy as np
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from tqdm import tqdm
 from datetime import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 from common.utils import count_parameters
-from common.dataloader import load_test_data, TimeSeriesDataset
+from common.dataloader import load_data
 
 def evaluate(model, loader, device):
     model.eval()
@@ -61,13 +61,14 @@ def main(model_name="PatchTST", **kwargs):
     if not os.path.exists(best_ckpt):
         raise FileNotFoundError(f"Best checkpoint not found: {best_ckpt}")
 
-    # Load test data (already normalized)
+    # Load checkpoint and scaler
     checkpoint = torch.load(best_ckpt, map_location=cfg['device'])
     scaler = checkpoint['scaler']
-    test_set = load_test_data(data_path, scaler=scaler, target_col=cfg['target_col'])
+
+    # Load test data using new load_data interface
+    test_set, _, target_col_idx = load_data(data_path, scaler=scaler, target_col=cfg['target_col'], split='test')
     in_chans = test_set.data.shape[1]
     cfg['in_chans'] = in_chans
-    target_col_idx = test_set.target_col_idx
 
     # Load model
     model = ModelClass(**cfg).to(cfg['device'])
@@ -94,6 +95,7 @@ def main(model_name="PatchTST", **kwargs):
     mse_raw = mean_squared_error(trues_inv.flatten(), preds_inv.flatten())
     mae_raw = mean_absolute_error(trues_inv.flatten(), preds_inv.flatten())
     r2_raw = r2_score(trues_inv.flatten(), preds_inv.flatten())
+    print(f"Test MSE (raw): {mse_raw:.4f} | Test MAE (raw): {mae_raw:.4f} | Test R2 (raw): {r2_raw:.4f}")
 
     # Save results to txt file
     log_path = os.path.join(output_dir, f'test_result_{dataset_name}.txt')

@@ -20,7 +20,19 @@ class TimeSeriesDataset(Dataset):
         y = self.data[idx+self.input_length:idx+self.input_length+self.output_length, self.target_col_idx]  # [output_length]
         return torch.tensor(x, dtype=torch.float32), torch.tensor(y, dtype=torch.float32)
 
-def load_data(data_path, input_length=336, output_length=96, val_ratio=0.1, scaler=None, target_col='T (degC)'):
+def split_data(data, input_length, output_length):
+    n = len(data)
+    n_train = int(n * 0.7)
+    n_val = int(n * 0.1)
+    n_test = n - n_train - n_val
+
+    train_data = data[:n_train]
+    val_data = data[n_train - input_length : n_train + n_val + output_length - 1]
+    test_data = data[n_train + n_val - input_length :]
+
+    return train_data, val_data, test_data
+
+def load_data(data_path, input_length=336, output_length=96, scaler=None, target_col='T (degC)', split='all'):
     df = pd.read_csv(data_path)
     if 'date' in df.columns:
         df = df.drop(columns=['date'])
@@ -32,24 +44,22 @@ def load_data(data_path, input_length=336, output_length=96, val_ratio=0.1, scal
         data = scaler.fit_transform(data)
     else:
         data = scaler.transform(data)
-    n = len(data)
-    n_val = int(n * val_ratio)
-    train_data = data[:-n_val]
-    val_data = data[-(n_val+input_length+output_length-1):]
+    train_data, val_data, test_data = split_data(data, input_length, output_length)
     train_set = TimeSeriesDataset(train_data, input_length, output_length, target_col_idx)
     val_set = TimeSeriesDataset(val_data, input_length, output_length, target_col_idx)
-    return train_set, val_set, scaler, target_col_idx
-
-def load_test_data(data_path, input_length=336, output_length=96, scaler=None, target_col='T (degC)'):
-    df = pd.read_csv(data_path)
-    if 'date' in df.columns:
-        df = df.drop(columns=['date'])
-    feature_cols = list(df.columns)
-    target_col_idx = feature_cols.index(target_col)
-    data = df.values.astype(np.float32)
-    if scaler is not None:
-        data = scaler.transform(data)
-    num_test = input_length + output_length
-    test_data = data[-num_test:]
     test_set = TimeSeriesDataset(test_data, input_length, output_length, target_col_idx)
-    return test_set
+    
+    if split == 'all':
+        return train_set, val_set, test_set, scaler, target_col_idx
+    else:
+        split_keys = [s.strip() for s in split.lower().split(',')]
+        result = []
+        for key in split_keys:
+            if key == 'train':
+                result.append(train_set)
+            elif key == 'val':
+                result.append(val_set)
+            elif key == 'test':
+                result.append(test_set)
+        result.extend([scaler, target_col_idx])
+        return tuple(result)

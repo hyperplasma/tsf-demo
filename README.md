@@ -11,4 +11,9 @@ All implemented models are listed below (some of them are still WIP):
 * Transformer
 * Informer
 * Autoformer
-* PatchTST
+* [PatchTST](https://arxiv.org/abs/2211.14730)
+
+
+## Datasets
+
+* [WEATHER-5K](https://github.com/taohan10200/WEATHER-5K)

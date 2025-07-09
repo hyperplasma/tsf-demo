@@ -11,8 +11,8 @@ from tqdm import tqdm
 from datetime import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
-from common.utils import ensure_dir, save_checkpoint, count_parameters, inverse_transform_predictions
-from common.dataloader import load_data, TimeSeriesDataset
+from common.utils import ensure_dir, save_checkpoint, count_parameters
+from common.dataloader import load_data
 
 def train_one_epoch(model, loader, criterion, optimizer, device):
     model.train()
@@ -90,10 +90,9 @@ def main(model_name="PatchTST", **kwargs):
         raise FileNotFoundError(f"Dataset file not found: {data_path}")
 
     # Data loading
-    train_set, val_set, scaler, _ = load_data(data_path, target_col=cfg['target_col'])
+    train_set, val_set, scaler, target_col_idx = load_data(data_path, target_col=cfg['target_col'], split='train,val')
     in_chans = train_set.data.shape[1]
     cfg['in_chans'] = in_chans
-    target_col_idx = train_set.target_col_idx
 
     train_loader = DataLoader(train_set, batch_size=cfg['batch_size'], shuffle=True)
     val_loader = DataLoader(val_set, batch_size=cfg['batch_size'], shuffle=False)
