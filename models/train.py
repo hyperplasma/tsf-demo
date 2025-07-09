@@ -11,7 +11,7 @@ from tqdm import tqdm
 from datetime import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
-from common.utils import ensure_dir, save_checkpoint, count_parameters
+from common.utils import ensure_dir, save_checkpoint, count_parameters, inverse_transform_predictions
 from common.dataloader import load_data, TimeSeriesDataset
 
 def train_one_epoch(model, loader, criterion, optimizer, device):
@@ -33,7 +33,7 @@ def train_one_epoch(model, loader, criterion, optimizer, device):
     acc = r2_score(trues.flatten(), preds.flatten())
     return total_loss / len(loader.dataset), acc
 
-def evaluate(model, loader, criterion, device):
+def evaluate(model, loader, criterion, device, scaler):  # 新增scaler参数
     model.eval()
     total_loss = 0
     preds, trues = [], []
@@ -45,12 +45,19 @@ def evaluate(model, loader, criterion, device):
             total_loss += loss.item() * x.size(0)
             preds.append(output.cpu().numpy())
             trues.append(y.cpu().numpy())
-    preds = np.concatenate(preds, axis=0)
-    trues = np.concatenate(trues, axis=0)
-    mse = mean_squared_error(trues.flatten(), preds.flatten())
-    mae = mean_absolute_error(trues.flatten(), preds.flatten())
-    acc = r2_score(trues.flatten(), preds.flatten())
-    return total_loss / len(loader.dataset), mse, mae, acc
+    # 合并预测和真实值（归一化尺度）
+    preds_norm = np.concatenate(preds, axis=0)
+    trues_norm = np.concatenate(trues, axis=0)
+    # 计算归一化尺度指标
+    mse_norm = mean_squared_error(trues_norm.flatten(), preds_norm.flatten())
+    mae_norm = mean_absolute_error(trues_norm.flatten(), preds_norm.flatten())
+    acc = r2_score(trues_norm.flatten(), preds_norm.flatten())
+    # 反归一化到原始尺度
+    preds_raw, trues_raw = inverse_transform_predictions(preds_norm, trues_norm, scaler)
+    # 计算原始尺度指标
+    mse_raw = mean_squared_error(trues_raw.flatten(), preds_raw.flatten())
+    mae_raw = mean_absolute_error(trues_raw.flatten(), preds_raw.flatten())
+    return total_loss / len(loader.dataset), mse_norm, mae_norm, acc, mse_raw, mae_raw
 
 def main(model_name="PatchTST", **kwargs):
     # Dynamically import model config
@@ -103,23 +110,6 @@ def main(model_name="PatchTST", **kwargs):
     output_dir = os.path.join(cfg['output_dir'], dataset_name)
     ensure_dir(output_dir)
     log_path = os.path.join(output_dir, f'train_log_{dataset_name}.txt')
-    
-    # Write model and dataset info to log file (if not exist, then create its header)
-    if not os.path.exists(log_path):
-        with open(log_path, 'w') as f:
-            current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-            f.write(f"Training started at {current_time}\n")
-            # Model information
-            model_config_str = ', '.join([f"{key}={value}" for key, value in cfg.items()])
-            f.write(f"Model: {model_name}\n")
-            f.write(f"Number of parameters: {num_params}\n")
-            f.write(f"Model config: {model_config_str}\n\n")
-            # Dataset information
-            f.write(f"Dataset: {dataset_name}\n")
-            f.write(f"Input channels: {in_chans}\n")
-            f.write(f"Train samples: {len(train_data)}, Train batches: {len(train_loader)}\n")
-            f.write(f"Val samples: {len(val_data)}, Val batches: {len(val_loader)}\n\n")
-            f.write("Epoch,Train Loss,Train R2,Val Loss,Val R2,Val MSE,Val MAE\n")
 
     start_epoch = 1
     best_loss = float('inf')
@@ -145,15 +135,34 @@ def main(model_name="PatchTST", **kwargs):
     for epoch in range(start_epoch, cfg['epochs'] + 1):
         print(f"\n--- Epoch {epoch} / {cfg['epochs']} ---")
         train_loss, train_acc = train_one_epoch(model, train_loader, criterion, optimizer, cfg['device'])
-        val_loss, val_mse, val_mae, val_acc = evaluate(model, val_loader, criterion, cfg['device'])
+        val_loss, val_mse_norm, val_mae_norm, val_acc, val_mse_raw, val_mae_raw = evaluate(model, val_loader, criterion, cfg['device'], scaler)
 
         scheduler.step(val_loss)
 
+        # Write model and dataset info to the log file header (if not exist)
+        if not os.path.exists(log_path):
+            with open(log_path, 'w') as f:
+                current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+                f.write(f"Training started at {current_time}\n")
+                # Model information
+                model_config_str = ', '.join([f"{key}={value}" for key, value in cfg.items()])
+                f.write(f"Model: {model_name}\n")
+                f.write(f"Number of parameters: {num_params}\n")
+                f.write(f"Model config: {model_config_str}\n\n")
+                # Dataset information
+                f.write(f"Dataset: {dataset_name}\n")
+                f.write(f"Input channels: {in_chans}\n")
+                f.write(f"Train samples: {len(train_data)}, Train batches: {len(train_loader)}\n")
+                f.write(f"Val samples: {len(val_data)}, Val batches: {len(val_loader)}\n\n")
+                f.write("Epoch,Train Loss,Train R2,Val Loss,Val R2,Val MSE (norm),Val MAE (norm),Val MSE (raw),Val MAE (raw)\n")
+
         with open(log_path, 'a') as f:
-            f.write(f"{epoch},{train_loss:.4f},{train_acc:.4f},{val_loss:.4f},{val_acc:.4f},{val_mse:.4f},{val_mae:.4f}\n")
+            f.write(f"{epoch},{train_loss:.4f},{train_acc:.4f},{val_loss:.4f},{val_acc:.4f},{val_mse_norm:.4f},{val_mae_norm:.4f},{val_mse_raw:.4f},{val_mae_raw:.4f}\n")
 
         print(f"Train Loss: {train_loss:.4f} | Train R2: {train_acc:.4f}")
-        print(f"Val Loss: {val_loss:.4f} | Val R2: {val_acc:.4f} | Val MSE: {val_mse:.4f} | Val MAE: {val_mae:.4f}")
+        print(f"Val Loss: {val_loss:.4f} | Val R2: {val_acc:.4f}")
+        print(f"Val MSE (norm): {val_mse_norm:.4f} | Val MAE (norm): {val_mae_norm:.4f}")
+        print(f"Val MSE (raw): {val_mse_raw:.4f} | Val MAE (raw): {val_mae_raw:.4f}")
 
         # Save best model
         is_best = val_loss < best_loss
@@ -181,4 +190,4 @@ def main(model_name="PatchTST", **kwargs):
     print(f"All logs and weights are saved in: {output_dir}")
 
 if __name__ == '__main__':
-    main(model_name="PatchTST", small=True)
+    main(model_name="PatchTST")

@@ -31,23 +31,23 @@ def load_data(csv_path, val_ratio=0.1, test_ratio=0.1, scaler=None):
     df = df.drop(columns=[col for col in df.columns if col.lower() in ['date', 'datetime', 'time', 'timestamp']])
     data = df.values
 
-    # Fit scaler on all data if not provided
-    if scaler is None:
-        scaler = MinMaxScaler()
-        data = scaler.fit_transform(data)
-    else:
-        data = scaler.transform(data)
-
     num_samples = len(data)
     num_val = int(num_samples * val_ratio)
     num_test = int(num_samples * test_ratio)
     num_train = num_samples - num_val - num_test
 
     train_data = data[:num_train]
-    val_data = data[num_train - num_val:num_train]
+    val_data = data[num_train:num_train + num_val]
+
+    if scaler is None:
+        scaler = MinMaxScaler()
+        scaler.fit(train_data)
+    train_data = scaler.transform(train_data)
+    val_data = scaler.transform(val_data)
+
     return train_data, val_data, scaler
 
-def load_test_data(csv_path, val_ratio=0.1, test_ratio=0.1, scaler=None):
+def load_test_data(csv_path, test_ratio=0.1, scaler=None):
     """
     Loads and normalizes test data from a CSV file.
     Returns test_data.
@@ -60,9 +60,7 @@ def load_test_data(csv_path, val_ratio=0.1, test_ratio=0.1, scaler=None):
         data = scaler.transform(data)
 
     num_samples = len(data)
-    num_val = int(num_samples * val_ratio)
     num_test = int(num_samples * test_ratio)
-    num_train = num_samples - num_val - num_test
 
-    test_data = data[num_train:num_train + num_test]
+    test_data = data[-num_test:]
     return test_data

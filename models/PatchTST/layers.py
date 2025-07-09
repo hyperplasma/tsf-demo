@@ -1,5 +1,5 @@
-import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 class PatchEmbedding(nn.Module):
     """
@@ -20,16 +20,13 @@ class PatchEmbedding(nn.Module):
         return: [B, N_patches, d_model]
         """
         B, L, C = x.shape
-        # unfold: [B, N_patches, patch_len, C]
-        num_patches = 1 + (L - self.patch_len) // self.stride
-        patches = []
-        for i in range(num_patches):
-            start = i * self.stride
-            end = start + self.patch_len
-            patch = x[:, start:end, :]  # [B, patch_len, C]
-            patches.append(patch)
-        patches = torch.stack(patches, dim=1)  # [B, N_patches, patch_len, C]
-        patches = patches.reshape(B, num_patches, self.patch_len * C)
+        # use unfold to extract patches
+        patches = F.unfold(
+            x.transpose(1, 2).unsqueeze(1),  # [B, C, 1, L]
+            kernel_size=(1, self.patch_len),
+            stride=(1, self.stride)
+        )  # [B, C*self.patch_len, N_patches]
+        patches = patches.transpose(1, 2).reshape(B, -1, self.patch_len * C)  # [B, N_patches, patch_len*C]
         out = self.proj(patches)  # [B, N_patches, d_model]
         return out
 

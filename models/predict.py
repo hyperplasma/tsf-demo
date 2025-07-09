@@ -7,10 +7,9 @@ from torch.utils.data import DataLoader, Dataset
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from tqdm import tqdm
 from datetime import datetime
-import joblib
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
-from common.utils import ensure_dir, count_parameters
+from common.utils import count_parameters, inverse_transform_predictions
 from common.dataloader import load_test_data, TimeSeriesDataset
 
 def evaluate(model, loader, device):
@@ -24,10 +23,11 @@ def evaluate(model, loader, device):
             trues.append(y.cpu().numpy())
     preds = np.concatenate(preds, axis=0)
     trues = np.concatenate(trues, axis=0)
-    mse = mean_squared_error(trues.flatten(), preds.flatten())
-    mae = mean_absolute_error(trues.flatten(), preds.flatten())
-    r2 = r2_score(trues.flatten(), preds.flatten())
-    return mse, mae, r2, preds, trues
+    # 计算归一化尺度指标
+    mse_norm = mean_squared_error(trues.flatten(), preds.flatten())
+    mae_norm = mean_absolute_error(trues.flatten(), preds.flatten())
+    r2_norm = r2_score(trues.flatten(), preds.flatten())
+    return mse_norm, mae_norm, r2_norm, preds, trues
 
 def main(model_name="PatchTST", **kwargs):
     # Dynamically import model config
@@ -55,42 +55,40 @@ def main(model_name="PatchTST", **kwargs):
         raise FileNotFoundError(f"Dataset file not found: {data_path}")
 
     output_dir = os.path.join(cfg['output_dir'], dataset_name)
-
-    # Load model
-    model = ModelClass(**cfg).to(cfg['device'])
-    num_params = count_parameters(model)
-    print(f"Model: {model_name}")
-    print(f"Number of parameters: {num_params}")
-    
     best_ckpt = os.path.join(output_dir, f'best_{dataset_name}.pth')
     if not os.path.exists(best_ckpt):
         best_ckpt = os.path.join(output_dir, f'checkpoint_{dataset_name}.pth')
     if not os.path.exists(best_ckpt):
         raise FileNotFoundError(f"Best checkpoint not found: {best_ckpt}")
-    checkpoint = torch.load(best_ckpt, map_location=cfg['device'])
-    model.load_state_dict(checkpoint['state_dict'])
-    scaler = checkpoint['scaler']
-
+    
     # Load test data (already normalized)
+    checkpoint = torch.load(best_ckpt, map_location=cfg['device'])
+    scaler = checkpoint['scaler']
     test_data = load_test_data(data_path, scaler=scaler)
     in_chans = test_data.shape[1]
     cfg['in_chans'] = in_chans
+    
+    # Load model
+    model = ModelClass(**cfg).to(cfg['device'])
+    num_params = count_parameters(model)
+    print(f"Model: {model_name}")
+    print(f"Number of parameters: {num_params}")
+    model.load_state_dict(checkpoint['state_dict'])
 
     test_set = TimeSeriesDataset(test_data, cfg['input_length'], cfg['output_length'])
     test_loader = DataLoader(test_set, batch_size=cfg['batch_size'], shuffle=False)
 
-    # Evaluate
-    mse, mae, r2, preds, trues = evaluate(model, test_loader, cfg['device'])
-    print(f"Test MSE: {mse:.4f} | Test MAE: {mae:.4f} | Test R2: {r2:.4f}")
+    # Evaluate（归一化尺度）
+    mse_norm, mae_norm, r2_norm, preds, trues = evaluate(model, test_loader, cfg['device'])
+    print(f"Test MSE (norm): {mse_norm:.4f} | Test MAE (norm): {mae_norm:.4f} | Test R2 (norm): {r2_norm:.4f}")
 
-    # ---- Inverse transform (反归一化) ----
-    # preds, trues shape: (samples, output_length, channels) or (samples, output_length, ...)
-    # Need to reshape to 2D for scaler.inverse_transform
-    shape = preds.shape
-    preds_2d = preds.reshape(-1, shape[-1])
-    trues_2d = trues.reshape(-1, shape[-1])
-    preds_inv = scaler.inverse_transform(preds_2d).reshape(shape)
-    trues_inv = scaler.inverse_transform(trues_2d).reshape(shape)
+    # 反归一化（使用utils中的通用函数）
+    preds_inv, trues_inv = inverse_transform_predictions(preds, trues, scaler)
+
+    # 计算原始尺度指标
+    mse_raw = mean_squared_error(trues_inv.flatten(), preds_inv.flatten())
+    mae_raw = mean_absolute_error(trues_inv.flatten(), preds_inv.flatten())
+    r2_raw = r2_score(trues_inv.flatten(), preds_inv.flatten())
 
     # Save results to txt file
     log_path = os.path.join(output_dir, f'test_result_{dataset_name}.txt')
@@ -106,8 +104,8 @@ def main(model_name="PatchTST", **kwargs):
         f.write(f"Dataset: {dataset_name}\n")
         f.write(f"Input channels: {in_chans}\n")
         f.write(f"Test samples: {len(test_data)}, Test batches: {len(test_loader)}\n\n")
-        f.write("Test MSE,Test MAE,Test R2\n")
-        f.write(f"{mse:.4f},{mae:.4f},{r2:.4f}\n")
+        f.write("Test MSE (norm),Test MAE (norm),Test R2 (norm),Test MSE (raw),Test MAE (raw),Test R2 (raw)\n")
+        f.write(f"{mse_norm:.4f},{mae_norm:.4f},{r2_norm:.4f},{mse_raw:.4f},{mae_raw:.4f},{r2_raw:.4f}\n")
 
     # Save inverse transformed predictions and ground truth
     np.save(os.path.join(output_dir, f'preds_{dataset_name}_inv.npy'), preds_inv)
@@ -115,4 +113,4 @@ def main(model_name="PatchTST", **kwargs):
     print(f"Test results and predictions saved in: {output_dir}")
 
 if __name__ == '__main__':
-    main(model_name="PatchTST", small=True)
+    main(model_name="PatchTST")

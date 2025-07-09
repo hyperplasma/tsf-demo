@@ -42,3 +42,24 @@ def get_positional_encoding(seq_len, d_model):
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+def inverse_transform_predictions(preds, trues, scaler):
+    """
+    对预测值和真实值进行反归一化（从归一化尺度恢复原始数据尺度）
+    Args:
+        preds: np.ndarray, 预测值（形状：[N, output_length, channels] 或其他任意维度，最后一维为特征）
+        trues: np.ndarray, 真实值（形状需与preds一致）
+        scaler: sklearn.preprocessing.Scaler, 训练时使用的归一化器
+    Returns:
+        preds_inv: np.ndarray, 反归一化后的预测值（与preds形状一致）
+        trues_inv: np.ndarray, 反归一化后的真实值（与trues形状一致）
+    """
+    # 保留原始形状（用于恢复）
+    shape = preds.shape
+    # 展平为二维（最后一维为特征数）
+    preds_2d = preds.reshape(-1, shape[-1])
+    trues_2d = trues.reshape(-1, shape[-1])
+    # 反归一化
+    preds_inv = scaler.inverse_transform(preds_2d).reshape(shape)
+    trues_inv = scaler.inverse_transform(trues_2d).reshape(shape)
+    return preds_inv, trues_inv
