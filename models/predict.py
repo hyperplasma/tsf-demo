@@ -3,7 +3,6 @@ import sys
 import importlib
 import torch
 import numpy as np
-import pandas as pd
 from torch.utils.data import DataLoader, Dataset
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from tqdm import tqdm
@@ -11,33 +10,7 @@ from datetime import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 from common.utils import ensure_dir, count_parameters
-
-# ------------------ Dataset Definition ------------------
-class TimeSeriesDataset(Dataset):
-    def __init__(self, data, input_length, output_length):
-        self.data = data
-        self.input_length = input_length
-        self.output_length = output_length
-
-    def __len__(self):
-        return len(self.data) - self.input_length - self.output_length + 1
-
-    def __getitem__(self, idx):
-        x = self.data[idx:idx + self.input_length]
-        y = self.data[idx + self.input_length:idx + self.input_length + self.output_length]
-        return torch.tensor(x, dtype=torch.float), torch.tensor(y, dtype=torch.float)
-
-def load_test_data(csv_path, val_ratio=0.1, test_ratio=0.1):
-    df = pd.read_csv(csv_path)
-    df = df.drop(columns=[col for col in df.columns if col.lower() in ['date', 'datetime', 'time', 'timestamp']])
-    data = df.values
-    num_samples = len(data)
-    num_val = int(num_samples * val_ratio)
-    num_test = int(num_samples * test_ratio)
-    num_train = num_samples - num_val - num_test
-
-    test_data = data[num_train:num_train + num_test]
-    return test_data
+from common.dataloader import load_test_data, TimeSeriesDataset
 
 def evaluate(model, loader, device):
     model.eval()
@@ -108,9 +81,10 @@ def main(model_name="PatchTST", **kwargs):
     print(f"Test MSE: {mse:.4f} | Test MAE: {mae:.4f} | Test R2: {r2:.4f}")
 
     # Save results to txt file
-    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_path = os.path.join(output_dir, f'test_result_{dataset_name}.txt')
     with open(log_path, 'w') as f:
+        current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+        f.write(f"Testing started at {current_time}\n")
         # 模型配置信息
         model_config_str = ', '.join([f"{key}={value}" for key, value in cfg.items()])
         f.write(f"Model: {model_name}\n")

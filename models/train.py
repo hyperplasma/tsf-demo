@@ -3,8 +3,7 @@ import sys
 import importlib
 import torch
 import numpy as np
-import pandas as pd
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
@@ -12,37 +11,9 @@ from tqdm import tqdm
 from datetime import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
-from common.utils import ensure_dir, load_checkpoint, save_checkpoint, count_parameters
+from common.utils import ensure_dir, save_checkpoint, count_parameters
+from common.dataloader import load_data, TimeSeriesDataset
 
-# ------------------ Dataset Definition ------------------
-class TimeSeriesDataset(Dataset):
-    def __init__(self, data, input_length, output_length):
-        self.data = data
-        self.input_length = input_length
-        self.output_length = output_length
-
-    def __len__(self):
-        return len(self.data) - self.input_length - self.output_length + 1
-
-    def __getitem__(self, idx):
-        x = self.data[idx:idx+self.input_length]
-        y = self.data[idx+self.input_length:idx+self.input_length+self.output_length]
-        return torch.tensor(x, dtype=torch.float), torch.tensor(y, dtype=torch.float)
-
-def load_data(csv_path, val_ratio=0.1, test_ratio=0.1):
-    df = pd.read_csv(csv_path)
-    df = df.drop(columns=[col for col in df.columns if col.lower() in ['date', 'datetime', 'time', 'timestamp']])
-    data = df.values
-    num_samples = len(data)
-    num_val = int(num_samples * val_ratio)
-    num_test = int(num_samples * test_ratio)
-    num_train = num_samples - num_val - num_test
-
-    train_data = data[:num_train]
-    val_data = data[num_train - num_val:num_train]
-    return train_data, val_data
-
-# ------------------ Train/Validation Functions ------------------
 def train_one_epoch(model, loader, criterion, optimizer, device):
     model.train()
     total_loss = 0
@@ -102,7 +73,7 @@ def main(model_name="PatchTST", **kwargs):
     np.random.seed(cfg['seed'])
 
     dataset_name = cfg['dataset']
-    print(f"Train dataset: {dataset_name}")
+    print(f"\nTrain dataset: {dataset_name}")
     data_path = os.path.join('dataset', f'{dataset_name}.csv')
     if not os.path.exists(data_path):
         raise FileNotFoundError(f"Dataset file not found: {data_path}")
@@ -132,23 +103,24 @@ def main(model_name="PatchTST", **kwargs):
     # Logging and checkpoint paths
     output_dir = os.path.join(cfg['output_dir'], dataset_name)
     ensure_dir(output_dir)
-    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_path = os.path.join(output_dir, f'train_log_weather.txt')
-
-    # Write model and dataset info to log file
-    with open(log_path, 'w') as f:
-        f.write(f"Training started at {current_time}\n")
-        # Model information
-        model_config_str = ', '.join([f"{key}={value}" for key, value in cfg.items()])
-        f.write(f"Model: {model_name}\n")
-        f.write(f"Number of parameters: {num_params}\n")
-        f.write(f"Model config: {model_config_str}\n\n")
-        # Dataset information
-        f.write(f"Dataset: {dataset_name}\n")
-        f.write(f"Input channels: {in_chans}\n")
-        f.write(f"Train samples: {len(train_data)}, Train batches: {len(train_loader)}\n")
-        f.write(f"Val samples: {len(val_data)}, Val batches: {len(val_loader)}\n\n")
-        f.write("Epoch,Train Loss,Train R2,Val Loss,Val R2,Val MSE,Val MAE\n")
+    
+    # Write model and dataset info to log file (if not exist, then create its header)
+    if not os.path.exists(log_path):
+        with open(log_path, 'w') as f:
+            current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+            f.write(f"Training started at {current_time}\n")
+            # Model information
+            model_config_str = ', '.join([f"{key}={value}" for key, value in cfg.items()])
+            f.write(f"Model: {model_name}\n")
+            f.write(f"Number of parameters: {num_params}\n")
+            f.write(f"Model config: {model_config_str}\n\n")
+            # Dataset information
+            f.write(f"Dataset: {dataset_name}\n")
+            f.write(f"Input channels: {in_chans}\n")
+            f.write(f"Train samples: {len(train_data)}, Train batches: {len(train_loader)}\n")
+            f.write(f"Val samples: {len(val_data)}, Val batches: {len(val_loader)}\n\n")
+            f.write("Epoch,Train Loss,Train R2,Val Loss,Val R2,Val MSE,Val MAE\n")
 
     start_epoch = 1
     best_loss = float('inf')

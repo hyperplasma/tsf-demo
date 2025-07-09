@@ -3,7 +3,7 @@ import sys
 import os
 import torch.nn as nn
 import torch.nn.functional as F
-from layers import PatchEmbedding, SeriesDecomp
+from models.PatchTST.layers import PatchEmbedding, SeriesDecomp
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 from models.common.utils import get_positional_encoding
