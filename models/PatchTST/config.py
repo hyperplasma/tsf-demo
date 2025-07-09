@@ -2,6 +2,7 @@ import os
 
 # PatchTST config
 config = {
+    # 模型参数
     'input_length': 336,
     'output_length': 96,
     'patch_len': 16,
@@ -19,8 +20,11 @@ config = {
     'kernel_size': 25,
     'norm_type': 'BatchNorm',
     'pred_type': 'direct',
-    'in_chans': 21,  # 多变量输入，单变量输出（T (degC)）
+    # 数据集相关参数
     'dataset': "weather",        # 数据集名称（如ETTh1、ETTh2、ETTm1、ETTm2、electricity、exchange_rate、traffic、weather等）
+    'target_col': 'T (degC)',    # 目标列名称（将数据集可视化后，选择一个变量作为目标）
+    'in_chans': 21,  # 多变量输入，单变量输出（T (degC)）
+    # 训练参数
     'device': "cuda" if os.environ.get("CUDA_VISIBLE_DEVICES") else "cpu",  # 设备
     'learning_rate': 0.0001,     # 学习率
     'batch_size': 32,            # 批大小
@@ -57,7 +61,6 @@ PATCHTST_SMALL_CONFIG_DIFF = {
     "epochs": 30,          # 增加总轮次配合早停
     "early_stop_patience": 12 # 延长早停等待
 }
-
 
 def get_config(custom_cfg=None, **kwargs):
     """

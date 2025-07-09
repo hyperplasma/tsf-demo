@@ -9,7 +9,7 @@ from tqdm import tqdm
 from datetime import datetime
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
-from common.utils import count_parameters, inverse_transform_predictions
+from common.utils import count_parameters
 from common.dataloader import load_test_data, TimeSeriesDataset
 
 def evaluate(model, loader, device):
@@ -60,14 +60,15 @@ def main(model_name="PatchTST", **kwargs):
         best_ckpt = os.path.join(output_dir, f'checkpoint_{dataset_name}.pth')
     if not os.path.exists(best_ckpt):
         raise FileNotFoundError(f"Best checkpoint not found: {best_ckpt}")
-    
+
     # Load test data (already normalized)
     checkpoint = torch.load(best_ckpt, map_location=cfg['device'])
     scaler = checkpoint['scaler']
-    test_data = load_test_data(data_path, scaler=scaler)
-    in_chans = test_data.shape[1]
+    test_set = load_test_data(data_path, scaler=scaler, target_col=cfg['target_col'])
+    in_chans = test_set.data.shape[1]
     cfg['in_chans'] = in_chans
-    
+    target_col_idx = test_set.target_col_idx
+
     # Load model
     model = ModelClass(**cfg).to(cfg['device'])
     num_params = count_parameters(model)
@@ -75,15 +76,19 @@ def main(model_name="PatchTST", **kwargs):
     print(f"Number of parameters: {num_params}")
     model.load_state_dict(checkpoint['state_dict'])
 
-    test_set = load_test_data(data_path, scaler=scaler, target_col_idx=2) # target_col_idx=2 for T (degC)
     test_loader = DataLoader(test_set, batch_size=cfg['batch_size'], shuffle=False)
 
     # Evaluate（归一化尺度）
     mse_norm, mae_norm, r2_norm, preds, trues = evaluate(model, test_loader, cfg['device'])
     print(f"Test MSE (norm): {mse_norm:.4f} | Test MAE (norm): {mae_norm:.4f} | Test R2 (norm): {r2_norm:.4f}")
 
-    # 反归一化（使用utils中的通用函数）
-    preds_inv, trues_inv = inverse_transform_predictions(preds, trues, scaler)
+    # 反归一化（只对目标列）
+    dummy_pred = np.zeros((preds.size, scaler.n_features_in_))
+    dummy_true = np.zeros((trues.size, scaler.n_features_in_))
+    dummy_pred[:, target_col_idx] = preds.flatten()
+    dummy_true[:, target_col_idx] = trues.flatten()
+    preds_inv = scaler.inverse_transform(dummy_pred)[:, target_col_idx].reshape(preds.shape)
+    trues_inv = scaler.inverse_transform(dummy_true)[:, target_col_idx].reshape(trues.shape)
 
     # 计算原始尺度指标
     mse_raw = mean_squared_error(trues_inv.flatten(), preds_inv.flatten())
@@ -103,7 +108,7 @@ def main(model_name="PatchTST", **kwargs):
         # Dataset info
         f.write(f"Dataset: {dataset_name}\n")
         f.write(f"Input channels: {in_chans}\n")
-        f.write(f"Test samples: {len(test_data)}, Test batches: {len(test_loader)}\n\n")
+        f.write(f"Test samples: {len(test_set)}, Test batches: {len(test_loader)}\n\n")
         f.write("Test MSE (norm),Test MAE (norm),Test R2 (norm),Test MSE (raw),Test MAE (raw),Test R2 (raw)\n")
         f.write(f"{mse_norm:.4f},{mae_norm:.4f},{r2_norm:.4f},{mse_raw:.4f},{mae_raw:.4f},{r2_raw:.4f}\n")
 

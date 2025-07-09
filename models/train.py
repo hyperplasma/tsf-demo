@@ -33,7 +33,7 @@ def train_one_epoch(model, loader, criterion, optimizer, device):
     acc = r2_score(trues.flatten(), preds.flatten())
     return total_loss / len(loader.dataset), acc
 
-def evaluate(model, loader, criterion, device, scaler):  # 新增scaler参数
+def evaluate(model, loader, criterion, device, scaler, target_col_idx):
     model.eval()
     total_loss = 0
     preds, trues = [], []
@@ -52,8 +52,13 @@ def evaluate(model, loader, criterion, device, scaler):  # 新增scaler参数
     mse_norm = mean_squared_error(trues_norm.flatten(), preds_norm.flatten())
     mae_norm = mean_absolute_error(trues_norm.flatten(), preds_norm.flatten())
     acc = r2_score(trues_norm.flatten(), preds_norm.flatten())
-    # 反归一化到原始尺度
-    preds_raw, trues_raw = inverse_transform_predictions(preds_norm, trues_norm, scaler)
+    # 反归一化到原始尺度（只对目标列）
+    dummy_pred = np.zeros((preds_norm.size, scaler.n_features_in_))
+    dummy_true = np.zeros((trues_norm.size, scaler.n_features_in_))
+    dummy_pred[:, target_col_idx] = preds_norm.flatten()
+    dummy_true[:, target_col_idx] = trues_norm.flatten()
+    preds_raw = scaler.inverse_transform(dummy_pred)[:, target_col_idx].reshape(preds_norm.shape)
+    trues_raw = scaler.inverse_transform(dummy_true)[:, target_col_idx].reshape(trues_norm.shape)
     # 计算原始尺度指标
     mse_raw = mean_squared_error(trues_raw.flatten(), preds_raw.flatten())
     mae_raw = mean_absolute_error(trues_raw.flatten(), preds_raw.flatten())
@@ -85,12 +90,10 @@ def main(model_name="PatchTST", **kwargs):
         raise FileNotFoundError(f"Dataset file not found: {data_path}")
 
     # Data loading
-    train_data, val_data, scaler, target_col_idx = load_data(data_path)
-    in_chans = train_data.shape[1]
+    train_set, val_set, scaler, _ = load_data(data_path, target_col=cfg['target_col'])
+    in_chans = train_set.data.shape[1]
     cfg['in_chans'] = in_chans
-
-    train_set = TimeSeriesDataset(train_data, cfg['input_length'], cfg['output_length'])
-    val_set = TimeSeriesDataset(val_data, cfg['input_length'], cfg['output_length'])
+    target_col_idx = train_set.target_col_idx
 
     train_loader = DataLoader(train_set, batch_size=cfg['batch_size'], shuffle=True)
     val_loader = DataLoader(val_set, batch_size=cfg['batch_size'], shuffle=False)
@@ -135,7 +138,7 @@ def main(model_name="PatchTST", **kwargs):
     for epoch in range(start_epoch, cfg['epochs'] + 1):
         print(f"\n--- Epoch {epoch} / {cfg['epochs']} ---")
         train_loss, train_acc = train_one_epoch(model, train_loader, criterion, optimizer, cfg['device'])
-        val_loss, val_mse_norm, val_mae_norm, val_acc, val_mse_raw, val_mae_raw = evaluate(model, val_loader, criterion, cfg['device'], scaler)
+        val_loss, val_mse_norm, val_mae_norm, val_acc, val_mse_raw, val_mae_raw = evaluate(model, val_loader, criterion, cfg['device'], scaler, target_col_idx)
 
         scheduler.step(val_loss)
 
@@ -152,8 +155,8 @@ def main(model_name="PatchTST", **kwargs):
                 # Dataset information
                 f.write(f"Dataset: {dataset_name}\n")
                 f.write(f"Input channels: {in_chans}\n")
-                f.write(f"Train samples: {len(train_data)}, Train batches: {len(train_loader)}\n")
-                f.write(f"Val samples: {len(val_data)}, Val batches: {len(val_loader)}\n\n")
+                f.write(f"Train samples: {len(train_set)}, Train batches: {len(train_loader)}\n")
+                f.write(f"Val samples: {len(val_set)}, Val batches: {len(val_loader)}\n\n")
                 f.write("Epoch,Train Loss,Train R2,Val Loss,Val R2,Val MSE (norm),Val MAE (norm),Val MSE (raw),Val MAE (raw)\n")
 
         with open(log_path, 'a') as f:
@@ -182,7 +185,7 @@ def main(model_name="PatchTST", **kwargs):
                         best_filename=f'best_{dataset_name}.pth')
 
         # Early stopping
-        if epoch - best_epoch > cfg['early_stop_patience']:
+        if epoch - best_epoch > cfg.get('early_stop_patience', 12):
             print("Early stopping!")
             break
 
