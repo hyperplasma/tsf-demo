@@ -53,13 +53,12 @@ def load_data(data_path, input_length=336, output_length=96, scaler=None, target
         return train_set, val_set, test_set, scaler, target_col_idx
     else:
         split_keys = [s.strip() for s in split.lower().split(',')]
-        result = []
+        sets = {'train': None, 'val': None, 'test': None}  # type: dict[str, TimeSeriesDataset | None]
         for key in split_keys:
             if key == 'train':
-                result.append(train_set)
+                sets['train'] = train_set
             elif key == 'val':
-                result.append(val_set)
+                sets['val'] = val_set
             elif key == 'test':
-                result.append(test_set)
-        result.extend([scaler, target_col_idx])
-        return tuple(result)
+                sets['test'] = test_set
+        return sets['train'], sets['val'], sets['test'], scaler, target_col_idx

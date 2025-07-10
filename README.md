@@ -8,11 +8,10 @@ All datasets are from [Autoformer](https://drive.google.com/drive/folders/1ZOYpT
 
 All implemented models are listed below (some of them are still WIP):
 
-* Transformer
+* [Transformer](docs/Transformer.md)
 * Informer
-* Autoformer
-* [PatchTST](https://arxiv.org/abs/2211.14730)
-
+* [Autoformer](docs/Autoformer.md)
+* [PatchTST](docs/PatchTST.md)
 
 ## Datasets
 

@@ -1,6 +1,5 @@
 import os
 import inspect
-import numpy as np
 import torch
 
 def ensure_dir(path):

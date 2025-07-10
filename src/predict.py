@@ -67,7 +67,7 @@ def main(model_name="PatchTST", **kwargs):
     output_length = getattr(model, 'output_length', 96)
 
     # Load test data using new load_data interface
-    test_set, _, target_col_idx = load_data(
+    _, _, test_set, _, target_col_idx = load_data(
         data_path,
         scaler=scaler,
         input_length=input_length,
@@ -75,13 +75,13 @@ def main(model_name="PatchTST", **kwargs):
         target_col=cfg['target_col'],
         split='test'
     )
-    in_chans = test_set.data.shape[1]
+    in_chans = test_set.data.shape[1] if test_set is not None else 0
     cfg['in_chans'] = in_chans
     # 如果模型支持in_chans动态调整，可重设
     if hasattr(model, 'in_chans'):
         model.in_chans = in_chans
 
-    test_loader = DataLoader(test_set, batch_size=cfg['batch_size'], shuffle=False)
+    test_loader = DataLoader(test_set, batch_size=cfg['batch_size'], shuffle=False) if test_set is not None else []
 
     # Evaluate（归一化尺度）
     mse_norm, mae_norm, r2_norm, preds, trues = evaluate(model, test_loader, cfg['device'])
@@ -114,7 +114,7 @@ def main(model_name="PatchTST", **kwargs):
         # Dataset info
         f.write(f"Dataset: {dataset_name}\n")
         f.write(f"Input channels: {in_chans}\n")
-        f.write(f"Test samples: {len(test_set)}, Test batches: {len(test_loader)}\n\n")
+        f.write(f"Test samples: {len(test_set) if test_set is not None else 0}, Test batches: {len(test_loader) if test_loader else 0}\n\n")
         f.write("Test MSE (norm),Test MAE (norm),Test R2 (norm),Test MSE (raw),Test MAE (raw),Test R2 (raw)\n")
         f.write(f"{mse_norm:.4f},{mae_norm:.4f},{r2_norm:.4f},{mse_raw:.4f},{mae_raw:.4f},{r2_raw:.4f}\n")
 

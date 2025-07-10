@@ -90,18 +90,23 @@ def main(model_name="PatchTST", **kwargs):
     output_length = getattr(model, 'output_length', 96)
 
     # Data loading
-    train_set, val_set, scaler, target_col_idx = load_data(
+    train_set, val_set, _, scaler, target_col_idx = load_data(
         data_path,
         input_length=input_length,
         output_length=output_length,
         target_col=cfg['target_col'],
         split='train,val'
     )
-    in_chans = train_set.data.shape[1]
+    if train_set is not None:
+        in_chans = train_set.data.shape[1]
+    elif val_set is not None:
+        in_chans = val_set.data.shape[1]
+    else:
+        raise ValueError('train_set和val_set都为None，无法推断in_chans')
     cfg['in_chans'] = in_chans
 
-    train_loader = DataLoader(train_set, batch_size=cfg['batch_size'], shuffle=True)
-    val_loader = DataLoader(val_set, batch_size=cfg['batch_size'], shuffle=False)
+    train_loader = DataLoader(train_set, batch_size=cfg['batch_size'], shuffle=True) if train_set is not None else []
+    val_loader = DataLoader(val_set, batch_size=cfg['batch_size'], shuffle=False) if val_set is not None else []
 
     # 如果模型支持in_chans动态调整，可重设
     if hasattr(model, 'in_chans'):
@@ -158,8 +163,8 @@ def main(model_name="PatchTST", **kwargs):
                 # Dataset information
                 f.write(f"Dataset: {dataset_name}\n")
                 f.write(f"Input channels: {in_chans}\n")
-                f.write(f"Train samples: {len(train_set)}, Train batches: {len(train_loader)}\n")
-                f.write(f"Val samples: {len(val_set)}, Val batches: {len(val_loader)}\n\n")
+                f.write(f"Train samples: {len(train_set) if train_set is not None else 0}, Train batches: {len(train_loader) if train_loader else 0}\n")
+                f.write(f"Val samples: {len(val_set) if val_set is not None else 0}, Val batches: {len(val_loader) if val_loader else 0}\n\n")
                 f.write("Epoch,Train Loss,Train R2,Val Loss,Val R2,Val MSE (norm),Val MAE (norm),Val MSE (raw),Val MAE (raw)\n")
 
         with open(log_path, 'a') as f:
