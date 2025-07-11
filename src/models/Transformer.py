@@ -55,11 +55,12 @@ class Transformer(nn.Module):
         x = self.dropout(x)
         x = self.encoder(x)     # [B, L, d_model]
         x = x.reshape(x.size(0), -1)  # [B, L*d_model]
-        if not self.individual:
-            x = self.projection(x)         # [B, output_length]
-        else:
-            # 每变量独立预测头，输出[B, output_length, in_chans]
+        if self.individual:
+            assert isinstance(self.projection, nn.ModuleList), "individual=True时projection应为ModuleList"
             x = torch.stack([proj(x) for proj in self.projection], dim=-1)
+        else:
+            assert isinstance(self.projection, nn.Linear), "individual=False时projection应为Linear"
+            x = self.projection(x)
         return x
 
 if __name__ == "__main__":
