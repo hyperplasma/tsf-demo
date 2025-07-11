@@ -56,7 +56,7 @@ def main(model_name="PatchTST", **kwargs):
     # 动态加载模型类
     model_module = importlib.import_module(f"models.{model_name}")
     ModelClass = getattr(model_module, model_name)
-    model = ModelClass(**cfg).to(cfg['device'])
+    model = ModelClass(**cfg, individual=True).to(cfg['device'])
     num_params = count_parameters(model)
     print(f"Model: {model_name}")
     print(f"Number of parameters: {num_params}")
@@ -87,13 +87,9 @@ def main(model_name="PatchTST", **kwargs):
     mse_norm, mae_norm, r2_norm, preds, trues = evaluate(model, test_loader, cfg['device'])
     print(f"Test MSE (norm): {mse_norm:.4f} | Test MAE (norm): {mae_norm:.4f} | Test R2 (norm): {r2_norm:.4f}")
 
-    # 反归一化（只对目标列）
-    dummy_pred = np.zeros((preds.size, scaler.n_features_in_))
-    dummy_true = np.zeros((trues.size, scaler.n_features_in_))
-    dummy_pred[:, target_col_idx] = preds.flatten()
-    dummy_true[:, target_col_idx] = trues.flatten()
-    preds_inv = scaler.inverse_transform(dummy_pred)[:, target_col_idx].reshape(preds.shape)
-    trues_inv = scaler.inverse_transform(dummy_true)[:, target_col_idx].reshape(trues.shape)
+    # 反归一化（所有变量）
+    preds_inv = scaler.inverse_transform(preds.reshape(-1, preds.shape[-1])).reshape(preds.shape)
+    trues_inv = scaler.inverse_transform(trues.reshape(-1, trues.shape[-1])).reshape(trues.shape)
 
     # 计算原始尺度指标
     mse_raw = mean_squared_error(trues_inv.flatten(), preds_inv.flatten())

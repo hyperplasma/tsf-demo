@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from typing import cast
 
 class PatchEmbedding(nn.Module):
     """
@@ -79,7 +80,12 @@ class PatchTST(nn.Module):
         self.encoder = nn.TransformerEncoder(encoder_layer, e_layers)
         self.dropout = nn.Dropout(dropout)
         # projection: flatten所有patch后映射到output_length
-        self.projection = nn.Linear(self.num_patches * d_model, output_length)
+        if self.individual:
+            self.projection = nn.ModuleList([
+                nn.Linear(self.num_patches * d_model, output_length) for _ in range(in_chans)
+            ])
+        else:
+            self.projection = nn.Linear(self.num_patches * d_model, output_length)
 
     def forward(self, x):
         # x: [B, L, C]
@@ -88,7 +94,14 @@ class PatchTST(nn.Module):
         x = self.dropout(x)
         x = self.encoder(x)
         x = x.reshape(x.size(0), -1)  # [B, N_patches*d_model]
-        x = self.projection(x)        # [B, output_length]
+        if self.individual:
+            projection_list = cast(nn.ModuleList, self.projection)
+            outs = []
+            for proj in projection_list:
+                outs.append(proj(x))
+            x = torch.stack(outs, dim=-1)  # [B, output_length, in_chans]
+        else:
+            x = self.projection(x)        # [B, output_length]
         return x
 
 if __name__ == "__main__":
@@ -98,7 +111,8 @@ if __name__ == "__main__":
     in_chans = 21
     output_length = 96
     x = torch.randn(batch_size, input_length, in_chans)
-    model = PatchTST(input_length=input_length, output_length=output_length, in_chans=in_chans)
+    # 测试多变量预测分支
+    model = PatchTST(input_length=input_length, output_length=output_length, in_chans=in_chans, individual=True)
     y = model(x)
     print(f"Input shape: {x.shape}")
-    print(f"Output shape: {y.shape}")  # [4, 96]
+    print(f"Output shape: {y.shape}")  # [4, 96, 21]

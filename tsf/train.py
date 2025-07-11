@@ -46,21 +46,14 @@ def evaluate(model, loader, criterion, device, scaler, target_col_idx):
             total_loss += loss.item() * x.size(0)
             preds.append(output.cpu().numpy())
             trues.append(y.cpu().numpy())
-    # 合并预测和真实值（归一化尺度）
     preds_norm = np.concatenate(preds, axis=0)
     trues_norm = np.concatenate(trues, axis=0)
-    # 计算归一化尺度指标
     mse_norm = mean_squared_error(trues_norm.flatten(), preds_norm.flatten())
     mae_norm = mean_absolute_error(trues_norm.flatten(), preds_norm.flatten())
     acc = r2_score(trues_norm.flatten(), preds_norm.flatten())
-    # 反归一化到原始尺度（只对目标列）
-    dummy_pred = np.zeros((preds_norm.size, scaler.n_features_in_))
-    dummy_true = np.zeros((trues_norm.size, scaler.n_features_in_))
-    dummy_pred[:, target_col_idx] = preds_norm.flatten()
-    dummy_true[:, target_col_idx] = trues_norm.flatten()
-    preds_raw = scaler.inverse_transform(dummy_pred)[:, target_col_idx].reshape(preds_norm.shape)
-    trues_raw = scaler.inverse_transform(dummy_true)[:, target_col_idx].reshape(trues_norm.shape)
-    # 计算原始尺度指标
+    # 反归一化到原始尺度（所有变量）
+    preds_raw = scaler.inverse_transform(preds_norm.reshape(-1, preds_norm.shape[-1])).reshape(preds_norm.shape)
+    trues_raw = scaler.inverse_transform(trues_norm.reshape(-1, trues_norm.shape[-1])).reshape(trues_norm.shape)
     mse_raw = mean_squared_error(trues_raw.flatten(), preds_raw.flatten())
     mae_raw = mean_absolute_error(trues_raw.flatten(), preds_raw.flatten())
     return total_loss / len(loader.dataset), mse_norm, mae_norm, acc, mse_raw, mae_raw
@@ -80,7 +73,7 @@ def main(model_name="PatchTST", **kwargs):
     # 动态加载模型类
     model_module = importlib.import_module(f"models.{model_name}")
     ModelClass = getattr(model_module, model_name)
-    model = ModelClass(**cfg).to(cfg['device'])
+    model = ModelClass(**cfg, individual=True).to(cfg['device'])
     num_params = count_parameters(model)
     print(f"Model: {model_name}")
     print(f"Number of parameters: {num_params}")

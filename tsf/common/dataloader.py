@@ -17,7 +17,7 @@ class TimeSeriesDataset(Dataset):
 
     def __getitem__(self, idx):
         x = self.data[idx:idx+self.input_length, :]  # [input_length, in_chans]
-        y = self.data[idx+self.input_length:idx+self.input_length+self.output_length, self.target_col_idx]  # [output_length]
+        y = self.data[idx+self.input_length:idx+self.input_length+self.output_length, :]  # [output_length, in_chans]
         return torch.tensor(x, dtype=torch.float32), torch.tensor(y, dtype=torch.float32)
 
 def split_data(data, input_length, output_length):
