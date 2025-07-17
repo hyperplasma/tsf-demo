@@ -85,7 +85,7 @@ class PatchTST(nn.Module):
                 nn.Linear(self.num_patches * d_model, output_length) for _ in range(in_chans)
             ])
         else:
-            self.projection = nn.Linear(self.num_patches * d_model, output_length)
+        self.projection = nn.Linear(self.num_patches * d_model, output_length)
 
     def forward(self, x):
         # x: [B, L, C]
@@ -101,7 +101,7 @@ class PatchTST(nn.Module):
                 outs.append(proj(x))
             x = torch.stack(outs, dim=-1)  # [B, output_length, in_chans]
         else:
-            x = self.projection(x)        # [B, output_length]
+        x = self.projection(x)        # [B, output_length]
         return x
 
 if __name__ == "__main__":
