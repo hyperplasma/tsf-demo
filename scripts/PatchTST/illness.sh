@@ -41,6 +41,7 @@ for pred_len in 24 36 48 60
     --stride 2 \
     --des 'Exp' \
     --train_epochs 100 \
+    --patience 20 \
     --lradj 'constant' \
     --itr 1 --batch_size 16 --learning_rate 0.0025 >$log_dir_name/${model_name}_${model_id_name}_${seq_len}_$pred_len.log
  done
