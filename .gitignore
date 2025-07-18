@@ -20,6 +20,8 @@ checkpoints
 dataset
 outputs
 test_results
+results
+result.txt
 *.tmp
 
 .zip

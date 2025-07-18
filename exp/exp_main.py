@@ -10,14 +10,13 @@ import torch.nn as nn
 from torch import optim
 from torch.optim import lr_scheduler 
 
+import sys
 import os
 import time
 
-import warnings
-import matplotlib.pyplot as plt
-import numpy as np
 from tqdm import tqdm
-import sys
+import warnings
+import numpy as np
 
 warnings.filterwarnings('ignore')
 
